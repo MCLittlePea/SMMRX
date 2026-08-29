@@ -1,0 +1,12 @@
+type,style,path,x,y,width,height
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,0,34,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,32,33,32,29
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,64,34,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,0,67,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,32,67,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,64,67,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,0,100,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,32,100,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,64,100,32,28
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,0,133,32,27
+NUMBER_FONT,SMB1,assets/fonts/M1_NumberFont.png,0,199,32,28

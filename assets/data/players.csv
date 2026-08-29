@@ -1,0 +1,11 @@
+style,player,ability,path,x,y,count,frameW,frameH
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,0,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,16,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,32,0,3,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,80,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,96,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,112,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,128,0,1,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,144,0,2,16,16
+SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,176,0,6,16,16
+

@@ -1,0 +1,3 @@
+id,style,theme,time,path,x,y,width,height
+ground,SMB1,Underwater,Day,assets/textures/SMB1/water/field.png,80,208,16,16
+ground,SMB1,Underwater,Night,assets/textures/SMB1/water/field_M.png,80,208,16,16

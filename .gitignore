@@ -1,0 +1,36 @@
+# CMake build directories
+cmake-build-*/
+build/
+out/
+
+# CLion / IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled object files
+*.o
+*.obj
+*.a
+*.lib
+
+# Executables
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Raylib generated
+*.pdb
+*.ilk
+
+# Logs / temp
+*.log
+*.tmp
+debug.txt
+debug_*.txt
+
+# OS
+Thumbs.db
+.DS_Store

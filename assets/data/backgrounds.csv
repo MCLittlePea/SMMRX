@@ -1,0 +1,10 @@
+style,theme,time,path
+SMB1,Ground,Day,assets/textures/SMB1/ground/background0.png
+SMB1,Ground,Night,assets/textures/SMB1/ground/background_M0.png
+SMB1,Ground,Night,assets/textures/SMB1/ground/background_M1.png
+SMB1,Underground,Day,assets/textures/SMB1/underground/background0.png
+SMB1,Underground,Night,assets/textures/SMB1/underground/background_M0.png
+SMB1,Underground,Night,assets/textures/SMB1/underground/background_M1.png
+SMB1,Underwater,Day,assets/textures/SMB1/water/background0.png
+SMB1,Underwater,Night,assets/textures/SMB1/water/background_M0.png
+SMB1,Underwater,Night,assets/textures/SMB1/water/background_M1.png
