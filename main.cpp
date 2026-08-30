@@ -51,10 +51,11 @@ enum Time {
 
 enum BGMType {
     Edit,
-    Normal,
-    Moon,
+    PlayNormal,
+    PlayMoon,
+    PlayHurry,
+    PlayMoonHurry,
     Hurry,
-    MoonHurry,
     BGM_TYPE_COUNT
 };
 
@@ -128,16 +129,13 @@ struct CourseInfo {
     bool operator<(const CourseInfo& o) const {
         if (style != o.style) return style < o.style;
         if (theme != o.theme) return theme < o.theme;
-        if (time != o.time) return time < o.time;
-        return maxTime < o.maxTime;
+        return time < o.time;
     }
 
     bool operator==(const CourseInfo& o) const {
         if (style != o.style) return false;
         if (theme != o.theme) return false;
-        if (time != o.time) return false;
-        if (maxTime != o.maxTime) return false;
-        return true;
+        return time == o.time;
     }
 };
 
@@ -192,7 +190,7 @@ float playerStateTimer = 0.0f;
 int playerAnimFrame = 0;
 float playerAnimTimer = 0.0f;
 bool playerFacingRight = true;
-CourseInfo currentCourseInfo = {SMB1, Underwater, Night};
+CourseInfo currentCourseInfo = {SMB1, Underwater, Night, 1000};
 
 map<BlockTexture2DInfo, vector<Texture2D>> blockTextures;
 map<PlayerTexture2DInfo, vector<Texture2D>> playerTextures;
@@ -200,6 +198,13 @@ map<BGMInfo, Music> bgms;
 map<GuiTextureInfo, vector<Texture2D>> guiTextures;
 Music currentBGM = {};
 bool hasCurrentBGM = false;
+Music hurryUpSe = {};
+bool playingHurryUp = false;
+float hurryUpTimer = 0.0f;
+bool hurryUpTriggered = false;
+GameStyle hurryUpPendingStyle;
+CourseTheme hurryUpPendingTheme;
+BGMType hurryUpPendingType;
 float bgmVolume = 1.0f;
 float bgmFadeStartVolume = 0.0f;
 float bgmFadeTargetVolume = 1.0f;
@@ -329,11 +334,11 @@ void loadBGMFromTheme(GameStyle style, CourseTheme theme) {
         default:          themeName = "Ground"; break;
     }
     string base = "assets/musics/SMB1/" + themeName;
-    loadBGM(style, theme, Normal,    base + ".mp3");
+    loadBGM(style, theme, PlayNormal,    base + ".mp3");
     loadBGM(style, theme, Edit,      base + "_Edit.mp3");
-    loadBGM(style, theme, Moon,      base + "_Moon.mp3");
-    loadBGM(style, theme, Hurry,     base + "_Hurry.mp3");
-    loadBGM(style, theme, MoonHurry, base + "_Moon_Hurry.mp3");
+    loadBGM(style, theme, PlayMoon,      base + "_Moon.mp3");
+    loadBGM(style, theme, PlayHurry,     base + "_Hurry.mp3");
+    loadBGM(style, theme, PlayMoonHurry, base + "_Moon_Hurry.mp3");
 }
 
 void playBGM(GameStyle style, CourseTheme theme, BGMType type) {
@@ -666,7 +671,10 @@ int main() {
     loadBlocksFromCSV("assets/data/blocks.csv");
     loadBackgroundsFromCSV("assets/data/backgrounds.csv");
     loadPlayersFromCSV("assets/data/players.csv");
-    loadBGMFromTheme(SMB1, currentCourseInfo.theme);
+    loadBGMFromTheme(SMB1, Ground);
+    loadBGMFromTheme(SMB1, Underground);
+    loadBGMFromTheme(SMB1, Underwater);
+    hurryUpSe = LoadMusicStream("assets/musics/SMB1/Hurry.mp3");
     loadGuiFromCSV("assets/data/guis.csv");
     hud.init();
 
@@ -687,9 +695,31 @@ int main() {
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
         if (hasCurrentBGM) UpdateMusicStream(currentBGM);
+        if (playingHurryUp) {
+            UpdateMusicStream(hurryUpSe);
+            hurryUpTimer += dt;
+            if (hurryUpTimer >= 3.1f) {
+                playingHurryUp = false;
+                StopMusicStream(hurryUpSe);
+                playBGM(hurryUpPendingStyle, hurryUpPendingTheme, hurryUpPendingType);
+            }
+        }
         updateBGMFade(dt);
         updateBackgroundAnim(dt);
+        int timeBefore = static_cast<int>(currentTime);
         hud.update(dt);
+        int timeAfter = static_cast<int>(currentTime);
+        if (!hurryUpTriggered && timeBefore > 100 && timeAfter <= 100 && state == STATE_GAME) {
+            hurryUpTriggered = true;
+            stopBGM();
+            PlayMusicStream(hurryUpSe);
+            SetMusicVolume(hurryUpSe, bgmVolume * 0.5f);
+            playingHurryUp = true;
+            hurryUpTimer = 0.0f;
+            hurryUpPendingStyle = SMB1;
+            hurryUpPendingTheme = currentCourseInfo.theme;
+            hurryUpPendingType = (currentCourseInfo.time == Night) ? PlayMoonHurry : PlayHurry;
+        }
 
         switch (state) {
             case STATE_START:
@@ -701,8 +731,20 @@ int main() {
                 animTimer += dt;
                 if (animTimer >= animDuration) {
                     state = STATE_GAME;
-                    BGMType bgmType = (currentCourseInfo.time == Night) ? Moon : Normal;
-                    playBGM(SMB1, currentCourseInfo.theme, bgmType);
+                    hurryUpTriggered = false;
+                    if (currentTime <= 100) {
+                        hurryUpTriggered = true;
+                        PlayMusicStream(hurryUpSe);
+                        SetMusicVolume(hurryUpSe, bgmVolume * 0.5f);
+                        playingHurryUp = true;
+                        hurryUpTimer = 0.0f;
+                        hurryUpPendingStyle = SMB1;
+                        hurryUpPendingTheme = currentCourseInfo.theme;
+                        hurryUpPendingType = (currentCourseInfo.time == Night) ? PlayMoonHurry : PlayHurry;
+                    } else {
+                        BGMType bgmType = (currentCourseInfo.time == Night) ? PlayMoon : PlayNormal;
+                        playBGM(SMB1, currentCourseInfo.theme, bgmType);
+                    }
                     hud.start();
                 }
                 break;
