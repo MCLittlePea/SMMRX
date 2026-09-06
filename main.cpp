@@ -142,10 +142,12 @@ struct CourseInfo {
 struct BlockTexture2DInfo {
     CourseInfo info;
     string id;
+    float scale = 4.0f;
 
     bool operator<(const BlockTexture2DInfo& o) const {
         if (info != o.info) return info < o.info;
-        return id < o.id;
+        if (id != o.id) return id < o.id;
+        return scale < o.scale;
     }
 };
 
@@ -153,11 +155,13 @@ struct PlayerTexture2DInfo {
     GameStyle style;
     Character player;
     Ability ability;
+    float scale = 4.0f;
 
     bool operator<(const PlayerTexture2DInfo& o) const {
         if (style != o.style) return style < o.style;
         if (player != o.player) return player < o.player;
-        return ability < o.ability;
+        if (ability != o.ability) return ability < o.ability;
+        return scale < o.scale;
     }
 };
 
@@ -176,10 +180,12 @@ struct BGMInfo {
 struct GuiTextureInfo {
     GameStyle style;
     GuiElementType type;
+    float scale = 4.0f;
 
     bool operator<(const GuiTextureInfo& o) const {
         if (style != o.style) return style < o.style;
-        return type < o.type;
+        if (type != o.type) return type < o.type;
+        return scale < o.scale;
     }
 };
 
@@ -187,14 +193,31 @@ Character currentPlayer = MARIO;
 Ability currentAbility = Nothing;
 float currentTime;
 float playerStateTimer = 0.0f;
+constexpr int PLAYER_FRAME_IDLE = 4;
+constexpr int PLAYER_FRAME_WALK_START = 13;
+constexpr int PLAYER_FRAME_WALK_END = 15;
+constexpr int PLAYER_FRAME_JUMP = 3;
+constexpr int PLAYER_FRAME_FALL = 3;
+constexpr float playerWalkAnimSpeed = 8.0f;
 int playerAnimFrame = 0;
 float playerAnimTimer = 0.0f;
 bool playerFacingRight = true;
-CourseInfo currentCourseInfo = {SMB1, Underwater, Night, 1000};
+CourseInfo currentCourseInfo = {SMB1, Ground, Day, 1000};
 
 map<BlockTexture2DInfo, vector<Texture2D>> blockTextures;
 map<PlayerTexture2DInfo, vector<Texture2D>> playerTextures;
-map<BGMInfo, Music> bgms;
+struct BGMData {
+    Music music;
+    float loopStart;
+    float loopLength;
+    bool hasLoop;
+};
+map<BGMInfo, BGMData> bgms;
+map<string, pair<float, float>> bgmLoopSamples;
+float musicLogicalPos = 0.0f;
+float currentBGMLoopStart = 0.0f;
+float currentBGMLoopEnd = 0.0f;
+bool currentBGMHasLoop = false;
 map<GuiTextureInfo, vector<Texture2D>> guiTextures;
 Music currentBGM = {};
 bool hasCurrentBGM = false;
@@ -211,6 +234,12 @@ float bgmFadeTargetVolume = 1.0f;
 float bgmFadeTimer = 0.0f;
 float bgmFadeDuration = 0.0f;
 bool bgmFading = false;
+bool gameOver = false;
+
+struct CollisionBox {
+    float x, y, width, height;
+};
+CollisionBox playerBox;
 map<CourseInfo, vector<Texture2D>> backgrounds;
 int bgAnimFrame = 0;
 float bgAnimTimer = 0.0f;
@@ -223,19 +252,43 @@ void addBlock(BlockPos pos, const string& id) {
 }
 
 void initLevel() {
-    for (int i = 1; i <= 72; i++) addBlock({i, 28}, "ground");
-    for (int i = 1; i <= 72; i++) addBlock({i, 27}, "ground");
-    addBlock({5,26}, "ground");
-    addBlock({12, 24}, "brick_block");
-    addBlock({13, 24}, "hard_block");
+    for (int i = 1; i <= 180; i++) addBlock({i, 28}, "ground");
+    for (int i = 1; i <= 180; i++) addBlock({i, 27}, "ground");
+    addBlock({5,25}, "ground");
+    addBlock({5,24}, "ground");
+    addBlock({5,23}, "ground");
+    addBlock({5,22}, "ground");
+    addBlock({5,21}, "ground");
+    addBlock({2,24},"hard_block");
+    addBlock({3,24},"hard_block");
+    addBlock({7,24},"hard_block");
+    addBlock({8,24},"hard_block");
 }
 
 constexpr int TILE_SIZE = 16;
 constexpr int SCALE = 4;
 constexpr int BLOCK_PX = TILE_SIZE * SCALE;
+
+map<string, pair<float, float>> blockBoxSizes = {
+    {"ground", {1.0f, 1.0f}},
+    {"brick_block", {1.0f, 1.0f}},
+    {"hard_block", {1.0f, 1.0f}},
+};
+
+bool boxOverlap(const CollisionBox& a, const CollisionBox& b) {
+    return a.x < b.x + b.width && a.x + a.width > b.x &&
+           a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+CollisionBox getBlockBox(const BlockPos& pos, const string& id) {
+    auto it = blockBoxSizes.find(id);
+    float w = (it != blockBoxSizes.end()) ? it->second.first : 1.0f;
+    float h = (it != blockBoxSizes.end()) ? it->second.second : 1.0f;
+    return {(float)(pos.x - 1) * BLOCK_PX, (float)(pos.y - 1) * BLOCK_PX, (float)BLOCK_PX * w, (float)BLOCK_PX * h};
+}
 constexpr int SCREEN_WIDTH = BLOCK_PX * 24;
 constexpr int SCREEN_HEIGHT = BLOCK_PX * 27 / 2;
-constexpr int COURSE_WIDTH = 72 * BLOCK_PX;
+constexpr int COURSE_WIDTH = 1000 * BLOCK_PX;
 constexpr int COURSE_HEIGHT = 28 * BLOCK_PX;
 
 
@@ -279,7 +332,7 @@ HudManager hud;
 float cameraX = 0.0f;
 float cameraY = -(COURSE_HEIGHT - SCREEN_HEIGHT);
 
-WorldPos playerPos = {(3 - 1) * BLOCK_PX, (26 - 1) * BLOCK_PX};
+WorldPos playerPos = {(3 - 1) * BLOCK_PX, (5 - 1) * BLOCK_PX};
 
 void initBlock(const BlockTexture2DInfo& info, const Texture2D& tex) {
     blockTextures[info].push_back(tex);
@@ -313,9 +366,68 @@ void loadPlayerFrames(GameStyle style, Character player, Ability ability,
     UnloadImage(sheet);
 }
 
+string bgmInfoToLoopName(GameStyle style, CourseTheme theme, BGMType type) {
+    string styleName = "SMB1";
+    string themeName;
+    switch (theme) {
+        case Ground:      themeName = "Ground"; break;
+        case Underground: themeName = "Underground"; break;
+        case Underwater:  themeName = "Underwater"; break;
+        case Desert:      themeName = "Desert"; break;
+        case Snow:        themeName = "Snow"; break;
+        case Sky:         themeName = "Sky"; break;
+        case Forest:      themeName = "Forest"; break;
+        case GhostHouse:  themeName = "GhostHouse"; break;
+        case Airship:     themeName = "Airship"; break;
+        case Castle:      themeName = "Castle"; break;
+        default:          themeName = "Ground"; break;
+    }
+    string suffix;
+    switch (type) {
+        case PlayNormal:    suffix = ""; break;
+        case PlayHurry:     suffix = "_Hurry"; break;
+        case PlayMoon:      suffix = "_Moon"; break;
+        case PlayMoonHurry: suffix = "_Moon_Hurry"; break;
+        case Edit:          suffix = "_Edit"; break;
+        default:            suffix = ""; break;
+    }
+    return styleName + "_" + themeName + suffix;
+}
+
+void loadBGMLoopsFromCSV(const string& path) {
+    ifstream file(path);
+    if (!file.is_open()) return;
+    string line;
+    getline(file, line);
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+        size_t p1 = line.find(',');
+        size_t p2 = line.find(',', p1 + 1);
+        if (p1 == string::npos || p2 == string::npos) continue;
+        string name = line.substr(0, p1);
+        float ls = stof(line.substr(p1 + 1, p2 - p1 - 1));
+        float le = stof(line.substr(p2 + 1));
+        bgmLoopSamples[name] = {ls, le};
+    }
+}
+
 void loadBGM(GameStyle style, CourseTheme theme, BGMType type, const string& path) {
     Music m = LoadMusicStream(path.c_str());
-    bgms[{style, theme, type}] = m;
+    BGMData data;
+    data.music = m;
+    data.hasLoop = false;
+    data.loopStart = 0.0f;
+    data.loopLength = 0.0f;
+    string loopName = bgmInfoToLoopName(style, theme, type);
+    auto lit = bgmLoopSamples.find(loopName);
+    if (lit != bgmLoopSamples.end()) {
+        float ls = lit->second.first;
+        float le = lit->second.second;
+        data.loopStart = ls;
+        data.loopLength = le - ls;
+        data.hasLoop = true;
+    }
+    bgms[{style, theme, type}] = data;
 }
 
 void loadBGMFromTheme(GameStyle style, CourseTheme theme) {
@@ -341,14 +453,47 @@ void loadBGMFromTheme(GameStyle style, CourseTheme theme) {
     loadBGM(style, theme, PlayMoonHurry, base + "_Moon_Hurry.mp3");
 }
 
-void playBGM(GameStyle style, CourseTheme theme, BGMType type) {
+void playBGM(GameStyle style, CourseTheme theme, BGMType type, bool alignPosition = false) {
     auto it = bgms.find({style, theme, type});
     if (it == bgms.end()) return;
     if (hasCurrentBGM) StopMusicStream(currentBGM);
-    currentBGM = it->second;
+    BGMData& data = it->second;
+    currentBGM = data.music;
     PlayMusicStream(currentBGM);
     SetMusicVolume(currentBGM, bgmVolume);
+    if (!alignPosition) {
+        musicLogicalPos = 0.0f;
+    }
+    if (data.hasLoop) {
+        currentBGMLoopStart = data.loopStart;
+        currentBGMLoopEnd = data.loopStart + data.loopLength;
+        currentBGMHasLoop = true;
+        if (alignPosition) {
+            float pos;
+            if (musicLogicalPos < data.loopStart) {
+                pos = musicLogicalPos;
+            } else {
+                pos = fmod(musicLogicalPos - data.loopStart, data.loopLength) + data.loopStart;
+            }
+            SeekMusicStream(currentBGM, pos);
+        }
+    } else {
+        currentBGMHasLoop = false;
+    }
     hasCurrentBGM = true;
+}
+
+void setMusicLogicalPos(float pos) {
+    musicLogicalPos = pos;
+    if (hasCurrentBGM && currentBGMHasLoop) {
+        float actualPos;
+        if (pos < currentBGMLoopStart) {
+            actualPos = pos;
+        } else {
+            actualPos = fmod(pos - currentBGMLoopStart, currentBGMLoopEnd - currentBGMLoopStart) + currentBGMLoopStart;
+        }
+        SeekMusicStream(currentBGM, actualPos);
+    }
 }
 
 void stopBGM() {
@@ -621,7 +766,7 @@ void DrawPlayer(WorldPos pos) {
     auto it = playerTextures.find(key);
     if (it == playerTextures.end() || it->second.empty()) return;
     auto& vec = it->second;
-    Texture2D tex = vec[playerAnimFrame % static_cast<int>(vec.size())];
+    Texture2D tex = vec[playerAnimFrame];
     Rectangle src = playerFacingRight ?
         (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
         (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
@@ -661,6 +806,7 @@ void DrawBlockWithTexture(const BlockPos pos, const Texture2D &tex) {
 
 int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SMMRX - Super Mario Maker RX");
+    SetExitKey(KEY_NULL);
     ClearWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
     InitAudioDevice();
@@ -671,6 +817,7 @@ int main() {
     loadBlocksFromCSV("assets/data/blocks.csv");
     loadBackgroundsFromCSV("assets/data/backgrounds.csv");
     loadPlayersFromCSV("assets/data/players.csv");
+    loadBGMLoopsFromCSV("assets/data/bgm_loop.csv");
     loadBGMFromTheme(SMB1, Ground);
     loadBGMFromTheme(SMB1, Underground);
     loadBGMFromTheme(SMB1, Underwater);
@@ -688,13 +835,31 @@ int main() {
     constexpr float animDuration = 3.0f;
 
     float playerXSpeed = 0;
-    constexpr float playerMaxSpeed = 400.0f;
+    constexpr float playerMaxSpeed = 355.0f;
+    constexpr float playerSprintMaxSpeed = 705.0f;
     constexpr float playerAccel = 2000.0f;
-    constexpr float playerFriction = 1500.0f; // 10.8 block per seconds
+    constexpr float playerFriction = 2000.0f;
+    constexpr float playerGravity = 2500.0f;
+    constexpr float playerMaxFallSpeed = 1200.0f;
+    constexpr float playerJumpSpeedMin = 1140.0f;
+    constexpr float playerJumpSpeedMax = 1260.0f;
+
+    float playerYSpeed = 0.0f;
+    bool onGround = false;
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
-        if (hasCurrentBGM) UpdateMusicStream(currentBGM);
+        if (hasCurrentBGM) {
+            UpdateMusicStream(currentBGM);
+            musicLogicalPos += dt;
+            if (currentBGMHasLoop) {
+                float pos = GetMusicTimePlayed(currentBGM);
+                if (pos >= currentBGMLoopEnd) {
+                    float overflow = pos - currentBGMLoopEnd;
+                    SeekMusicStream(currentBGM, currentBGMLoopStart + overflow);
+                }
+            }
+        }
         if (playingHurryUp) {
             UpdateMusicStream(hurryUpSe);
             hurryUpTimer += dt;
@@ -709,6 +874,14 @@ int main() {
         int timeBefore = static_cast<int>(currentTime);
         hud.update(dt);
         int timeAfter = static_cast<int>(currentTime);
+        if (state == STATE_GAME && !gameOver && currentTime <= 0.0f) {
+            gameOver = true;
+            stopBGM();
+            if (playingHurryUp) {
+                playingHurryUp = false;
+                StopMusicStream(hurryUpSe);
+            }
+        }
         if (!hurryUpTriggered && timeBefore > 100 && timeAfter <= 100 && state == STATE_GAME) {
             hurryUpTriggered = true;
             stopBGM();
@@ -731,6 +904,8 @@ int main() {
                 animTimer += dt;
                 if (animTimer >= animDuration) {
                     state = STATE_GAME;
+                    musicLogicalPos = 0.0f;
+                    gameOver = false;
                     hurryUpTriggered = false;
                     if (currentTime <= 100) {
                         hurryUpTriggered = true;
@@ -749,6 +924,7 @@ int main() {
                 }
                 break;
             case STATE_GAME: {
+                if (!gameOver) {
                 constexpr float camSpeed = 1000.0f;
                 if (IsKeyDown(KEY_A)) playerXSpeed -= playerAccel * dt;
                 if (IsKeyDown(KEY_D)) playerXSpeed += playerAccel * dt;
@@ -756,11 +932,73 @@ int main() {
                     if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - playerFriction * dt);
                     else if (playerXSpeed < 0) playerXSpeed = min(0.0f, playerXSpeed + playerFriction * dt);
                 }
-                playerXSpeed = max(playerXSpeed, -playerMaxSpeed);
-                playerXSpeed = min(playerXSpeed, playerMaxSpeed);
+                float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? playerSprintMaxSpeed : playerMaxSpeed;
+                playerXSpeed = max(playerXSpeed, -currentMaxSpeed);
+                playerXSpeed = min(playerXSpeed, currentMaxSpeed);
                 playerPos.x += playerXSpeed * dt;
+                playerBox.x = playerPos.x;
+                playerBox.y = playerPos.y;
+                playerBox.width = BLOCK_PX;
+                playerBox.height = BLOCK_PX;
+                for (const auto& block : levelBlocks) {
+                    CollisionBox blockBox = getBlockBox(block.pos, block.id);
+                    if (boxOverlap(playerBox, blockBox)) {
+                        if (playerXSpeed > 0) {
+                            playerPos.x = blockBox.x - playerBox.width;
+                        } else if (playerXSpeed < 0) {
+                            playerPos.x = blockBox.x + blockBox.width;
+                        }
+                        playerXSpeed = 0.0f;
+                        playerBox.x = playerPos.x;
+                    }
+                }
+                playerYSpeed += playerGravity * dt;
+                if (playerYSpeed > playerMaxFallSpeed) playerYSpeed = playerMaxFallSpeed;
+                if (IsKeyPressed(KEY_SPACE) && onGround) {
+                    float speedRatio = fabs(playerXSpeed) / currentMaxSpeed;
+                    if (speedRatio > 1.0f) speedRatio = 1.0f;
+                    playerYSpeed = -(playerJumpSpeedMin + speedRatio * (playerJumpSpeedMax - playerJumpSpeedMin));
+                    onGround = false;
+                }
+                playerPos.y += playerYSpeed * dt;
+                playerBox.y = playerPos.y;
+                onGround = false;
+                for (const auto& block : levelBlocks) {
+                    CollisionBox blockBox = getBlockBox(block.pos, block.id);
+                    if (boxOverlap(playerBox, blockBox)) {
+                        if (playerYSpeed > 0) {
+                            playerPos.y = blockBox.y - playerBox.height;
+                            playerYSpeed = 0.0f;
+                            onGround = true;
+                        } else if (playerYSpeed < 0) {
+                            playerPos.y = blockBox.y + blockBox.height;
+                            playerYSpeed = 0.0f;
+                        }
+                        playerBox.y = playerPos.y;
+                    }
+                }
+                if (onGround) {
+                    if (playerXSpeed > 10.0f) playerFacingRight = true;
+                    else if (playerXSpeed < -10.0f) playerFacingRight = false;
+                    if (fabs(playerXSpeed) < 10.0f) {
+                        playerAnimFrame = PLAYER_FRAME_IDLE;
+                    } else {
+                        playerAnimTimer += dt * (fabs(playerXSpeed) / 100.0f) * playerWalkAnimSpeed;
+                        playerAnimFrame = PLAYER_FRAME_WALK_START + (static_cast<int>(playerAnimTimer) % (PLAYER_FRAME_WALK_END - PLAYER_FRAME_WALK_START + 1));
+                    }
+                } else {
+                    if (playerYSpeed < 0) playerAnimFrame = PLAYER_FRAME_JUMP;
+                    else playerAnimFrame = PLAYER_FRAME_FALL;
+                }
                 cameraX = SCREEN_WIDTH / 2.0f - BLOCK_PX / 2.0f - playerPos.x;
-                cameraY = SCREEN_HEIGHT / 2.0f - BLOCK_PX / 2.0f - playerPos.y;
+                float playerScreenY = playerPos.y + cameraY;
+                float deadTop = SCREEN_HEIGHT / 3.0f;
+                float deadBottom = SCREEN_HEIGHT * 2.0f / 3.0f;
+                if (playerScreenY < deadTop) {
+                    cameraY = deadTop - playerPos.y;
+                } else if (playerScreenY > deadBottom) {
+                    cameraY = deadBottom - playerPos.y;
+                }
                 // if (IsKeyDown(KEY_LEFT))  cameraX += camSpeed * dt;
                 // if (IsKeyDown(KEY_RIGHT)) cameraX -= camSpeed * dt;
                 // if (IsKeyDown(KEY_UP))    cameraY += camSpeed * dt;
@@ -773,6 +1011,7 @@ int main() {
                 if (cameraX > camMaxX) cameraX = camMaxX;
                 if (cameraY < camMinY) cameraY = camMinY;
                 if (cameraY > camMaxY) cameraY = camMaxY;
+                }
                 break;
             }
         }
@@ -807,10 +1046,7 @@ int main() {
                 ClearBackground(SKYBLUE);
                 DrawBackground();
                 for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlock(i);
-                DrawRectangle(
-                    static_cast<int>(playerPos.x + cameraX),
-                    static_cast<int>(playerPos.y + cameraY),
-                    BLOCK_PX, BLOCK_PX, BLACK);
+                DrawPlayer(playerPos);
                 hud.draw();
                 break;
         }
@@ -827,8 +1063,8 @@ int main() {
     for (auto& [info, vec] : playerTextures)
         for (auto& tex : vec)
             UnloadTexture(tex);
-    for (auto& [info, m] : bgms)
-        UnloadMusicStream(m);
+    for (auto& [info, data] : bgms)
+        UnloadMusicStream(data.music);
     for (auto& [info, vec] : guiTextures)
         for (auto& tex : vec)
             UnloadTexture(tex);
