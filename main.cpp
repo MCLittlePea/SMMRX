@@ -8,6 +8,10 @@
 #include <fstream>
 #include <sstream>
 #include "player_settings.hpp"
+#include "render_settings.hpp"
+#include "window_settings.hpp"
+#include "course_settings.hpp"
+#include "animation_settings.hpp"
 
 using namespace std;
 
@@ -206,7 +210,6 @@ map<string, int> playerFrames = {
     {"swim2", 8}, {"swim3", 9}, {"swim4", 10}, {"swim5", 11},
     {"turn0", 12}, {"walk0", 13}, {"walk1", 14}, {"walk2", 15}
 };
-constexpr float playerWalkAnimSpeed = 4.0f;
 int playerAnimFrame = 0;
 float playerAnimTimer = 0.0f;
 bool playerFacingRight = true;
@@ -238,6 +241,7 @@ GameStyle hurryUpPendingStyle;
 CourseTheme hurryUpPendingTheme;
 BGMType hurryUpPendingType;
 float bgmVolume = 1.0f;
+float seVolume = 1.0f;
 float bgmFadeStartVolume = 0.0f;
 float bgmFadeTargetVolume = 1.0f;
 float bgmFadeTimer = 0.0f;
@@ -245,7 +249,7 @@ float bgmFadeDuration = 0.0f;
 bool bgmFading = false;
 bool gameOver = false;
 bool debugMode = false;
-Language currentLanguage = English;
+Language currentLanguage = Chinese;
 Font guiFont;
 map<Language, map<string, string>> langData;
 
@@ -256,7 +260,6 @@ CollisionBox playerBox;
 map<CourseInfo, vector<Texture2D>> backgrounds;
 int bgAnimFrame = 0;
 float bgAnimTimer = 0.0f;
-constexpr float bgAnimFrameDuration = 0.5f;
 
 vector<PlacedBlock> levelBlocks;
 
@@ -266,7 +269,10 @@ void loadSound(const string& id, const string& path) {
 
 void playSound(const string& id) {
     auto it = sounds.find(id);
-    if (it != sounds.end()) PlaySound(it->second);
+    if (it != sounds.end()) {
+        SetSoundVolume(it->second, seVolume);
+        PlaySound(it->second);
+    }
 }
 
 map<string, string> parseLangJSON(const string& content) {
@@ -381,9 +387,6 @@ void initLevel() {
     addBlock({8,24},"hard_block");
 }
 
-constexpr int TILE_SIZE = 16;
-constexpr int SCALE = 4;
-constexpr int BLOCK_PX = TILE_SIZE * SCALE;
 
 map<string, pair<float, float>> blockBoxSizes = {
     {"ground", {1.0f, 1.0f}},
@@ -402,10 +405,6 @@ CollisionBox getBlockBox(const BlockPos& pos, const string& id) {
     float h = (it != blockBoxSizes.end()) ? it->second.second : 1.0f;
     return {(float)(pos.x - 1) * BLOCK_PX, (float)(pos.y - 1) * BLOCK_PX, (float)BLOCK_PX * w, (float)BLOCK_PX * h};
 }
-constexpr int SCREEN_WIDTH = BLOCK_PX * 24;
-constexpr int SCREEN_HEIGHT = BLOCK_PX * 27 / 2;
-constexpr int COURSE_WIDTH = 1000 * BLOCK_PX;
-constexpr int COURSE_HEIGHT = 28 * BLOCK_PX;
 
 
 
@@ -789,9 +788,6 @@ void DrawBackground() {
     auto it = backgrounds.find(currentCourseInfo);
     if (it == backgrounds.end() || it->second.empty()) return;
     Texture2D tex = it->second[bgAnimFrame % static_cast<int>(it->second.size())];
-    constexpr float bgSize = 512.0f * SCALE;
-    constexpr float bgY = -2 * BLOCK_PX;
-    constexpr float bgOffsetX = -8 * BLOCK_PX;
     for (int i = 0; i * bgSize + bgOffsetX < COURSE_WIDTH; i++) {
         float px = floorf(i * bgSize + bgOffsetX + cameraX);
         float py = floorf(bgY + cameraY);
@@ -877,6 +873,21 @@ int getBlockTextureIndex(int blockIndex) {
     return -1;
 }
 
+void DrawPlayerShadow(WorldPos pos) {
+    PlayerTexture2DInfo key = {currentCourseInfo.style, currentPlayer, currentAbility};
+    auto it = playerTextures.find(key);
+    if (it == playerTextures.end() || it->second.empty()) return;
+    auto& vec = it->second;
+    Texture2D tex = vec[playerAnimFrame];
+    Rectangle src = playerFacingRight ?
+        (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
+        (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
+    ScreenPos screen = {pos.x + cameraX, pos.y + cameraY};
+    Rectangle shadowDest = {screen.x + shadowOffset, screen.y + shadowOffset,
+                            static_cast<float>(tex.width) * SCALE, static_cast<float>(tex.height) * SCALE};
+    DrawTexturePro(tex, src, shadowDest, (Vector2){0, 0}, 0.0f, Fade(BLACK, 0.5f));
+}
+
 void DrawPlayer(WorldPos pos) {
     PlayerTexture2DInfo key = {currentCourseInfo.style, currentPlayer, currentAbility};
     auto it = playerTextures.find(key);
@@ -890,6 +901,18 @@ void DrawPlayer(WorldPos pos) {
     Rectangle dest = {screen.x, screen.y,
                       static_cast<float>(tex.width) * SCALE, static_cast<float>(tex.height) * SCALE};
     DrawTexturePro(tex, src, dest, (Vector2){0, 0}, 0.0f, WHITE);
+}
+
+void DrawBlockShadow(int blockIndex) {
+    const PlacedBlock& block = levelBlocks[blockIndex];
+    const BlockTexture2DInfo key = {currentCourseInfo, block.id};
+    const auto it = blockTextures.find(key);
+    if (it == blockTextures.end() || it->second.empty()) return;
+    int idx = getBlockTextureIndex(blockIndex);
+    if (idx < 0 || idx >= static_cast<int>(it->second.size())) return;
+    const auto px = static_cast<float>((block.pos.x - 1) * BLOCK_PX) + cameraX;
+    const auto py = static_cast<float>((block.pos.y - 1) * BLOCK_PX) + cameraY;
+    DrawTextureEx(it->second[idx], (Vector2){px + shadowOffset, py + shadowOffset}, 0.0f, static_cast<float>(SCALE), Fade(BLACK, 0.3f));
 }
 
 void DrawBlock(int blockIndex) {
@@ -952,7 +975,6 @@ int main() {
     bool startClickable = false;
 
     float animTimer = 0.0f;
-    constexpr float animDuration = 3.0f;
 
     float playerXSpeed = 0;
 
@@ -1207,6 +1229,8 @@ int main() {
             case STATE_GAME:
                 ClearBackground(SKYBLUE);
                 DrawBackground();
+                for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlockShadow(i);
+                DrawPlayerShadow(playerPos);
                 for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlock(i);
                 DrawPlayer(playerPos);
                 if (debugMode) {
