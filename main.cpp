@@ -7,6 +7,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include "player_settings.hpp"
 
 using namespace std;
 
@@ -14,6 +15,12 @@ enum GameState {
     STATE_START,
     STATE_ANIMATION,
     STATE_GAME
+};
+
+enum Language {
+    English,
+    Chinese,
+    LanguageCount
 };
 
 enum Character {
@@ -65,7 +72,7 @@ enum GuiElementType {
 };
 
 enum Ability {
-    Nothing,
+    Small,
     Super,
     Fire,
     Big,
@@ -190,15 +197,16 @@ struct GuiTextureInfo {
 };
 
 Character currentPlayer = MARIO;
-Ability currentAbility = Nothing;
+Ability currentAbility = Small;
 float currentTime;
 float playerStateTimer = 0.0f;
-constexpr int PLAYER_FRAME_IDLE = 4;
-constexpr int PLAYER_FRAME_WALK_START = 13;
-constexpr int PLAYER_FRAME_WALK_END = 15;
-constexpr int PLAYER_FRAME_JUMP = 3;
-constexpr int PLAYER_FRAME_FALL = 3;
-constexpr float playerWalkAnimSpeed = 8.0f;
+map<string, int> playerFrames = {
+    {"climb0", 0}, {"climb1", 1}, {"dead0", 2}, {"jump0", 3},
+    {"stand0", 4}, {"stoop0", 5}, {"swim0", 6}, {"swim1", 7},
+    {"swim2", 8}, {"swim3", 9}, {"swim4", 10}, {"swim5", 11},
+    {"turn0", 12}, {"walk0", 13}, {"walk1", 14}, {"walk2", 15}
+};
+constexpr float playerWalkAnimSpeed = 4.0f;
 int playerAnimFrame = 0;
 float playerAnimTimer = 0.0f;
 bool playerFacingRight = true;
@@ -213,6 +221,7 @@ struct BGMData {
     bool hasLoop;
 };
 map<BGMInfo, BGMData> bgms;
+map<string, Sound> sounds;
 map<string, pair<float, float>> bgmLoopSamples;
 float musicLogicalPos = 0.0f;
 float currentBGMLoopStart = 0.0f;
@@ -235,6 +244,10 @@ float bgmFadeTimer = 0.0f;
 float bgmFadeDuration = 0.0f;
 bool bgmFading = false;
 bool gameOver = false;
+bool debugMode = false;
+Language currentLanguage = English;
+Font guiFont;
+map<Language, map<string, string>> langData;
 
 struct CollisionBox {
     float x, y, width, height;
@@ -246,6 +259,109 @@ float bgAnimTimer = 0.0f;
 constexpr float bgAnimFrameDuration = 0.5f;
 
 vector<PlacedBlock> levelBlocks;
+
+void loadSound(const string& id, const string& path) {
+    sounds[id] = LoadSound(path.c_str());
+}
+
+void playSound(const string& id) {
+    auto it = sounds.find(id);
+    if (it != sounds.end()) PlaySound(it->second);
+}
+
+map<string, string> parseLangJSON(const string& content) {
+    map<string, string> result;
+    size_t pos = 0;
+    while (pos < content.size()) {
+        size_t keyStart = content.find('"', pos);
+        if (keyStart == string::npos) break;
+        size_t keyEnd = content.find('"', keyStart + 1);
+        if (keyEnd == string::npos) break;
+        string key = content.substr(keyStart + 1, keyEnd - keyStart - 1);
+        size_t colon = content.find(':', keyEnd);
+        if (colon == string::npos) break;
+        size_t valStart = content.find('"', colon);
+        if (valStart == string::npos) break;
+        size_t valEnd = content.find('"', valStart + 1);
+        if (valEnd == string::npos) break;
+        string value = content.substr(valStart + 1, valEnd - valStart - 1);
+        result[key] = value;
+        pos = valEnd + 1;
+    }
+    return result;
+}
+
+void loadLanguage(Language lang, const string& path) {
+    ifstream file(path);
+    if (!file.is_open()) return;
+    stringstream ss;
+    ss << file.rdbuf();
+    langData[lang] = parseLangJSON(ss.str());
+}
+
+void loadLanguages() {
+    loadLanguage(English, "assets/lang/en.json");
+    loadLanguage(Chinese, "assets/lang/zh.json");
+}
+
+const string& langText(const string& id) {
+    static string missing;
+    auto it = langData.find(currentLanguage);
+    if (it != langData.end()) {
+        auto it2 = it->second.find(id);
+        if (it2 != it->second.end()) return it2->second;
+    }
+    missing = id;
+    return missing;
+}
+
+const char* langTextC(const string& id) {
+    return langText(id).c_str();
+}
+
+vector<int> utf8ToCodepoints(const string& str) {
+    vector<int> codepoints;
+    size_t i = 0;
+    while (i < str.size()) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        int codepoint = 0;
+        int len = 0;
+        if (c < 0x80) { codepoint = c; len = 1; }
+        else if ((c & 0xE0) == 0xC0) { codepoint = c & 0x1F; len = 2; }
+        else if ((c & 0xF0) == 0xE0) { codepoint = c & 0x0F; len = 3; }
+        else if ((c & 0xF8) == 0xF0) { codepoint = c & 0x07; len = 4; }
+        for (int j = 1; j < len && i + j < str.size(); j++) {
+            codepoint = (codepoint << 6) | (static_cast<unsigned char>(str[i+j]) & 0x3F);
+        }
+        codepoints.push_back(codepoint);
+        i += len;
+    }
+    return codepoints;
+}
+
+void initFont() {
+    set<int> codepointSet;
+    for (int i = 32; i < 127; i++) codepointSet.insert(i);
+    for (auto& [lang, texts] : langData) {
+        for (auto& [key, value] : texts) {
+            for (int cp : utf8ToCodepoints(value)) {
+                codepointSet.insert(cp);
+            }
+        }
+    }
+    vector<int> chars(codepointSet.begin(), codepointSet.end());
+    guiFont = LoadFontEx("assets/fonts/Zpix.ttf", 48, chars.data(), static_cast<int>(chars.size()));
+    if (guiFont.texture.id == 0) TraceLog(LOG_WARNING, "Failed to load font");
+    SetTextureFilter(guiFont.texture, TEXTURE_FILTER_POINT);
+}
+
+void drawText(const char* text, float x, float y, float size, Color color) {
+    DrawTextEx(guiFont, text, {x, y}, size, 1, color);
+}
+
+int measureText(const char* text, float size) {
+    return static_cast<int>(MeasureTextEx(guiFont, text, size, 1).x);
+}
 
 void addBlock(BlockPos pos, const string& id) {
     levelBlocks.push_back({pos, id});
@@ -580,7 +696,7 @@ Ability parseAbility(const string& s) {
     if (s == "Cat") return Cat;
     if (s == "Boomerang") return Boomerang;
     if (s == "Builder") return Builder;
-    return Nothing;
+    return Small;
 }
 
 vector<string> splitCSV(const string& line) {
@@ -809,7 +925,10 @@ int main() {
     SetExitKey(KEY_NULL);
     ClearWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
+    loadLanguages();
+    initFont();
     InitAudioDevice();
+    loadSound("jump_small", "assets/ses/SMB1/SmallMarioJump.wav");
 
     loadBlockFromField({{144, 112}}, "ground");
     loadBlockFromField({{16, 0}}, "brick_block");
@@ -828,6 +947,7 @@ int main() {
     initLevel();
 
     GameState state = STATE_START;
+    // GameState state = STATE_ANIMATION;
     float startTimer = 0.0f;
     bool startClickable = false;
 
@@ -835,17 +955,13 @@ int main() {
     constexpr float animDuration = 3.0f;
 
     float playerXSpeed = 0;
-    constexpr float playerMaxSpeed = 355.0f;
-    constexpr float playerSprintMaxSpeed = 705.0f;
-    constexpr float playerAccel = 2000.0f;
-    constexpr float playerFriction = 2000.0f;
-    constexpr float playerGravity = 2500.0f;
-    constexpr float playerMaxFallSpeed = 1200.0f;
-    constexpr float playerJumpSpeedMin = 1140.0f;
-    constexpr float playerJumpSpeedMax = 1260.0f;
 
     float playerYSpeed = 0.0f;
     bool onGround = false;
+    bool isCrouching = false;
+    bool crouchJump = false;
+    bool isBraking = false;
+    float brakeTimer = 0.0f;
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -924,32 +1040,64 @@ int main() {
                 }
                 break;
             case STATE_GAME: {
+                if (IsKeyPressed(KEY_F1)) debugMode = !debugMode;
                 if (!gameOver) {
                 constexpr float camSpeed = 1000.0f;
-                if (IsKeyDown(KEY_A)) playerXSpeed -= playerAccel * dt;
-                if (IsKeyDown(KEY_D)) playerXSpeed += playerAccel * dt;
-                if (!IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) {
+                isCrouching = (onGround || crouchJump) && IsKeyDown(KEY_S);
+                bool groundCrouch = isCrouching && onGround;
+                float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? playerSprintMaxSpeed : playerMaxSpeed;
+                if (!isBraking && onGround && fabs(playerXSpeed) >= playerSprintMaxSpeed * 0.9f) {
+                    if ((playerXSpeed > 0 && IsKeyDown(KEY_A)) || (playerXSpeed < 0 && IsKeyDown(KEY_D))) {
+                        isBraking = true;
+                        brakeTimer = 0.0f;
+                    }
+                }
+                if (isBraking) {
+                    if (fabs(playerXSpeed) > 1.0f) {
+                        if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - playerTurnFriction * dt);
+                        else playerXSpeed = min(0.0f, playerXSpeed + playerTurnFriction * dt);
+                    } else {
+                        playerXSpeed = 0.0f;
+                        brakeTimer += dt;
+                        if (brakeTimer >= playerTurnDelay) isBraking = false;
+                    }
+                } else if (!groundCrouch) {
+                    if (IsKeyDown(KEY_A) && playerXSpeed > -currentMaxSpeed) {
+                        playerXSpeed -= playerAccel * dt;
+                        if (playerXSpeed < -currentMaxSpeed) playerXSpeed = -currentMaxSpeed;
+                    }
+                    if (IsKeyDown(KEY_D) && playerXSpeed < currentMaxSpeed) {
+                        playerXSpeed += playerAccel * dt;
+                        if (playerXSpeed > currentMaxSpeed) playerXSpeed = currentMaxSpeed;
+                    }
+                }
+                bool overSpeed = fabs(playerXSpeed) > currentMaxSpeed + 1.0f;
+                if (!isBraking && (groundCrouch || (!IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) || overSpeed)) {
                     if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - playerFriction * dt);
                     else if (playerXSpeed < 0) playerXSpeed = min(0.0f, playerXSpeed + playerFriction * dt);
                 }
-                float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? playerSprintMaxSpeed : playerMaxSpeed;
-                playerXSpeed = max(playerXSpeed, -currentMaxSpeed);
-                playerXSpeed = min(playerXSpeed, currentMaxSpeed);
+                float prevX = playerPos.x;
                 playerPos.x += playerXSpeed * dt;
-                playerBox.x = playerPos.x;
-                playerBox.y = playerPos.y;
-                playerBox.width = BLOCK_PX;
-                playerBox.height = BLOCK_PX;
+                playerBox.x = playerPos.x + playerBoxInset;
+                playerBox.width = BLOCK_PX - playerBoxInset * 2.0f;
+                float boxHeight = BLOCK_PX - playerBoxTopInset;
+                if (isCrouching) boxHeight *= 0.5f;
+                playerBox.height = boxHeight;
+                playerBox.y = playerPos.y + BLOCK_PX - playerBox.height;
                 for (const auto& block : levelBlocks) {
                     CollisionBox blockBox = getBlockBox(block.pos, block.id);
                     if (boxOverlap(playerBox, blockBox)) {
-                        if (playerXSpeed > 0) {
-                            playerPos.x = blockBox.x - playerBox.width;
-                        } else if (playerXSpeed < 0) {
-                            playerPos.x = blockBox.x + blockBox.width;
+                        float prevBoxRight = prevX + playerBoxInset + playerBox.width;
+                        float prevBoxLeft = prevX + playerBoxInset;
+                        if (playerXSpeed > 0 && prevBoxRight <= blockBox.x + 1.0f) {
+                            playerPos.x = blockBox.x - playerBox.width - playerBoxInset;
+                            playerXSpeed = 0.0f;
+                            playerBox.x = playerPos.x + playerBoxInset;
+                        } else if (playerXSpeed < 0 && prevBoxLeft >= blockBox.x + blockBox.width - 1.0f) {
+                            playerPos.x = blockBox.x + blockBox.width - playerBoxInset;
+                            playerXSpeed = 0.0f;
+                            playerBox.x = playerPos.x + playerBoxInset;
                         }
-                        playerXSpeed = 0.0f;
-                        playerBox.x = playerPos.x;
                     }
                 }
                 playerYSpeed += playerGravity * dt;
@@ -959,36 +1107,50 @@ int main() {
                     if (speedRatio > 1.0f) speedRatio = 1.0f;
                     playerYSpeed = -(playerJumpSpeedMin + speedRatio * (playerJumpSpeedMax - playerJumpSpeedMin));
                     onGround = false;
+                    if (isCrouching) crouchJump = true;
+                    playSound("jump_small");
                 }
+                float prevBoxY = playerBox.y;
                 playerPos.y += playerYSpeed * dt;
-                playerBox.y = playerPos.y;
+                playerBox.y = playerPos.y + BLOCK_PX - playerBox.height;
                 onGround = false;
                 for (const auto& block : levelBlocks) {
                     CollisionBox blockBox = getBlockBox(block.pos, block.id);
                     if (boxOverlap(playerBox, blockBox)) {
-                        if (playerYSpeed > 0) {
-                            playerPos.y = blockBox.y - playerBox.height;
+                        if (playerYSpeed > 0 && prevBoxY + playerBox.height <= blockBox.y + 1.0f) {
+                            playerPos.y = blockBox.y - BLOCK_PX;
                             playerYSpeed = 0.0f;
                             onGround = true;
-                        } else if (playerYSpeed < 0) {
-                            playerPos.y = blockBox.y + blockBox.height;
+                            crouchJump = false;
+                            playerBox.y = playerPos.y + BLOCK_PX - playerBox.height;
+                        } else if (playerYSpeed < 0 && prevBoxY >= blockBox.y + blockBox.height - 1.0f) {
+                            playerPos.y = blockBox.y + blockBox.height - (BLOCK_PX - playerBox.height);
                             playerYSpeed = 0.0f;
+                            playerBox.y = playerPos.y + BLOCK_PX - playerBox.height;
                         }
-                        playerBox.y = playerPos.y;
                     }
                 }
                 if (onGround) {
-                    if (playerXSpeed > 10.0f) playerFacingRight = true;
-                    else if (playerXSpeed < -10.0f) playerFacingRight = false;
-                    if (fabs(playerXSpeed) < 10.0f) {
-                        playerAnimFrame = PLAYER_FRAME_IDLE;
+                    if (isBraking) {
+                        playerAnimFrame = playerFrames["turn0"];
+                    } else if (groundCrouch) {
+                        if (IsKeyDown(KEY_D)) playerFacingRight = true;
+                        else if (IsKeyDown(KEY_A)) playerFacingRight = false;
+                        playerAnimFrame = playerFrames["stoop0"];
                     } else {
+                        if (playerXSpeed > 10.0f) playerFacingRight = true;
+                        else if (playerXSpeed < -10.0f) playerFacingRight = false;
+                        if (fabs(playerXSpeed) < 10.0f) {
+                            playerAnimFrame = playerFrames["stand0"];
+                        } else {
                         playerAnimTimer += dt * (fabs(playerXSpeed) / 100.0f) * playerWalkAnimSpeed;
-                        playerAnimFrame = PLAYER_FRAME_WALK_START + (static_cast<int>(playerAnimTimer) % (PLAYER_FRAME_WALK_END - PLAYER_FRAME_WALK_START + 1));
+                        playerAnimFrame = playerFrames["walk0"] + (static_cast<int>(playerAnimTimer) % 3);
+                        }
                     }
                 } else {
-                    if (playerYSpeed < 0) playerAnimFrame = PLAYER_FRAME_JUMP;
-                    else playerAnimFrame = PLAYER_FRAME_FALL;
+                    if (crouchJump) playerAnimFrame = playerFrames["stoop0"];
+                    else if (playerYSpeed < 0) playerAnimFrame = playerFrames["jump0"];
+                    else playerAnimFrame = playerFrames["jump0"];
                 }
                 cameraX = SCREEN_WIDTH / 2.0f - BLOCK_PX / 2.0f - playerPos.x;
                 float playerScreenY = playerPos.y + cameraY;
@@ -1021,17 +1183,17 @@ int main() {
         switch (state) {
             case STATE_START: {
                 ClearBackground(RAYWHITE);
-                const char* title = "SMMRX";
-                const char* sub = "Super Mario Maker RX";
+                const char* title = langTextC("title");
+                const char* sub = langTextC("subtitle");
                 int tSize = 80, sSize = 30;
-                int tw = MeasureText(title, tSize);
-                int sw = MeasureText(sub, sSize);
-                DrawText(title, (SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - 60, tSize, DARKGRAY);
-                DrawText(sub, (SCREEN_WIDTH - sw) / 2, SCREEN_HEIGHT / 2 + 30, sSize, GRAY);
+                int tw = measureText(title, tSize);
+                int sw = measureText(sub, sSize);
+                drawText(title, (SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - 60, tSize, DARKGRAY);
+                drawText(sub, (SCREEN_WIDTH - sw) / 2, SCREEN_HEIGHT / 2 + 30, sSize, GRAY);
                 if (startClickable) {
-                    const char* hint = "Click anywhere to start";
-                    int hw = MeasureText(hint, 24);
-                    DrawText(hint, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 100, 24, LIGHTGRAY);
+                    const char* hint = langTextC("click_to_start");
+                    int hw = measureText(hint, 24);
+                    drawText(hint, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 100, 24, LIGHTGRAY);
                 }
                 break;
             }
@@ -1039,7 +1201,7 @@ int main() {
                 ClearBackground(BLACK);
                 float a = animTimer < 1.0f ? animTimer :
                           (animTimer > animDuration - 1.0f ? animDuration - animTimer : 1.0f);
-                DrawText("Intro Animation", SCREEN_WIDTH / 2 - 200, SCREEN_HEIGHT / 2 - 20, 40, Fade(WHITE, a));
+                const char* animText = langTextC("intro_animation"); drawText(animText, (SCREEN_WIDTH - measureText(animText, 40)) / 2, SCREEN_HEIGHT / 2 - 20, 40, Fade(WHITE, a));
                 break;
             }
             case STATE_GAME:
@@ -1047,6 +1209,9 @@ int main() {
                 DrawBackground();
                 for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlock(i);
                 DrawPlayer(playerPos);
+                if (debugMode) {
+                    drawText(TextFormat(langTextC("debug-speed"), fabs(playerXSpeed) / BLOCK_PX), 10, 10, 40, WHITE);
+                }
                 hud.draw();
                 break;
         }
