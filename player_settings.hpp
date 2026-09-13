@@ -14,5 +14,7 @@ constexpr float playerJumpSpeedMax = 1260.0f;
 constexpr float playerTurnFriction = 2000.0f;
 constexpr float playerTurnDelay = 0.2f;
 constexpr float playerWalkAnimSpeed = 4.0f;
+constexpr float playerDeathWaitTime = 0.5f;
+constexpr float playerDeathJumpSpeed = 1140.0f;
 
 #endif

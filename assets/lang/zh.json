@@ -1,7 +1,7 @@
 {
-    "title": "SMMRX",
-    "subtitle": "超级马里奥制造RX",
-    "click_to_start": "点击任意处开始",
-    "intro_animation": "开场动画",
-    "debug-speed": "速度: %f 米/秒"
+    "gui.title": "SMMRX",
+    "gui.subtitle": "超级马里奥制造RX",
+    "gui.click_to_start": "点击任意处开始",
+    "gui.intro_animation": "开场动画",
+    "debug.speed": "速度: %f 米/秒"
 }

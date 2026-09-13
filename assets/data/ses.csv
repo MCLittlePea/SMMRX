@@ -1,0 +1,3 @@
+id,path,volume
+player.small_jump,assets/ses/SMB1/SmallMarioJump.wav,0.5
+player.death,assets/ses/SMB1/PlayerDown.wav,1.0

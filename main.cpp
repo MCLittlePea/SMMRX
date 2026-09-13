@@ -13,12 +13,16 @@
 #include "course_settings.hpp"
 #include "animation_settings.hpp"
 
+#define ENABLE_CAMERA_BOUNDS 1
+#define ENABLE_ANIMATION 1
+
 using namespace std;
 
 enum GameState {
     STATE_START,
     STATE_ANIMATION,
-    STATE_GAME
+    STATE_GAME,
+    STATE_DEAD
 };
 
 enum Language {
@@ -213,7 +217,7 @@ map<string, int> playerFrames = {
 int playerAnimFrame = 0;
 float playerAnimTimer = 0.0f;
 bool playerFacingRight = true;
-CourseInfo currentCourseInfo = {SMB1, Ground, Day, 1000};
+CourseInfo currentCourseInfo = {SMB1, Ground, Day, 70};
 
 map<BlockTexture2DInfo, vector<Texture2D>> blockTextures;
 map<PlayerTexture2DInfo, vector<Texture2D>> playerTextures;
@@ -224,7 +228,12 @@ struct BGMData {
     bool hasLoop;
 };
 map<BGMInfo, BGMData> bgms;
-map<string, Sound> sounds;
+struct SoundEffect {
+    Sound sound;
+    float volume = 1.0f;
+};
+
+map<string, SoundEffect> soundEffects;
 map<string, pair<float, float>> bgmLoopSamples;
 float musicLogicalPos = 0.0f;
 float currentBGMLoopStart = 0.0f;
@@ -241,13 +250,23 @@ GameStyle hurryUpPendingStyle;
 CourseTheme hurryUpPendingTheme;
 BGMType hurryUpPendingType;
 float bgmVolume = 1.0f;
-float seVolume = 1.0f;
 float bgmFadeStartVolume = 0.0f;
 float bgmFadeTargetVolume = 1.0f;
 float bgmFadeTimer = 0.0f;
 float bgmFadeDuration = 0.0f;
 bool bgmFading = false;
 bool gameOver = false;
+bool isDead = false;
+float deathWaitTimer = 0.0f;
+bool deathJumped = false;
+bool deathBounce = true;
+#if ENABLE_ANIMATION
+GameState state = STATE_START;
+#else
+GameState state = STATE_ANIMATION;
+#endif
+float playerXSpeed = 0.0f;
+float playerYSpeed = 0.0f;
 bool debugMode = false;
 Language currentLanguage = Chinese;
 Font guiFont;
@@ -263,15 +282,15 @@ float bgAnimTimer = 0.0f;
 
 vector<PlacedBlock> levelBlocks;
 
-void loadSound(const string& id, const string& path) {
-    sounds[id] = LoadSound(path.c_str());
+void loadSoundEffect(const string& id, const string& path, float volume = 1.0f) {
+    soundEffects[id] = {LoadSound(path.c_str()), volume};
 }
 
-void playSound(const string& id) {
-    auto it = sounds.find(id);
-    if (it != sounds.end()) {
-        SetSoundVolume(it->second, seVolume);
-        PlaySound(it->second);
+void playSoundEffect(const string& id) {
+    auto it = soundEffects.find(id);
+    if (it != soundEffects.end()) {
+        SetSoundVolume(it->second.sound, it->second.volume);
+        PlaySound(it->second.sound);
     }
 }
 
@@ -374,8 +393,10 @@ void addBlock(BlockPos pos, const string& id) {
 }
 
 void initLevel() {
-    for (int i = 1; i <= 180; i++) addBlock({i, 28}, "ground");
-    for (int i = 1; i <= 180; i++) addBlock({i, 27}, "ground");
+    for (int i = 1; i <= 10; i++) addBlock({i, 28}, "ground");
+    for (int i = 1; i <= 10; i++) addBlock({i, 27}, "ground");
+    for (int i = 12; i <= 200; i++) addBlock({i, 28}, "ground");
+    for (int i = 12; i <= 200; i++) addBlock({i, 27}, "ground");
     addBlock({5,25}, "ground");
     addBlock({5,24}, "ground");
     addBlock({5,23}, "ground");
@@ -629,6 +650,23 @@ void fadeBGM(float targetVolume, float duration) {
     bgmFading = true;
 }
 
+void die(bool bounce = true) {
+    if (isDead) return;
+    isDead = true;
+    state = STATE_DEAD;
+    stopBGM();
+    if (playingHurryUp) {
+        playingHurryUp = false;
+        StopMusicStream(hurryUpSe);
+    }
+    playerYSpeed = 0.0f;
+    playerXSpeed = 0.0f;
+    deathWaitTimer = 0.0f;
+    deathJumped = false;
+    deathBounce = bounce;
+    playSoundEffect("player.death");
+}
+
 void updateBGMFade(float dt) {
     if (!bgmFading) return;
     bgmFadeTimer += dt;
@@ -774,6 +812,19 @@ void loadPlayersFromCSV(const string& path) {
     }
 }
 
+void loadSoundEffectsFromCSV(const string& path) {
+    ifstream file(path);
+    string line;
+    getline(file, line);
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+        auto c = splitCSV(line);
+        if (c.size() < 2) continue;
+        float vol = (c.size() >= 3) ? stof(c[2]) : 1.0f;
+        loadSoundEffect(c[0], c[1], vol);
+    }
+}
+
 void updateBackgroundAnim(float dt) {
     auto it = backgrounds.find(currentCourseInfo);
     if (it == backgrounds.end() || it->second.size() <= 1) return;
@@ -878,7 +929,7 @@ void DrawPlayerShadow(WorldPos pos) {
     auto it = playerTextures.find(key);
     if (it == playerTextures.end() || it->second.empty()) return;
     auto& vec = it->second;
-    Texture2D tex = vec[playerAnimFrame];
+    Texture2D tex = vec[isDead ? playerFrames["dead0"] : playerAnimFrame];
     Rectangle src = playerFacingRight ?
         (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
         (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
@@ -893,7 +944,7 @@ void DrawPlayer(WorldPos pos) {
     auto it = playerTextures.find(key);
     if (it == playerTextures.end() || it->second.empty()) return;
     auto& vec = it->second;
-    Texture2D tex = vec[playerAnimFrame];
+    Texture2D tex = vec[isDead ? playerFrames["dead0"] : playerAnimFrame];
     Rectangle src = playerFacingRight ?
         (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
         (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
@@ -951,7 +1002,7 @@ int main() {
     loadLanguages();
     initFont();
     InitAudioDevice();
-    loadSound("jump_small", "assets/ses/SMB1/SmallMarioJump.wav");
+    loadSoundEffectsFromCSV("assets/data/ses.csv");
 
     loadBlockFromField({{144, 112}}, "ground");
     loadBlockFromField({{16, 0}}, "brick_block");
@@ -969,16 +1020,12 @@ int main() {
 
     initLevel();
 
-    GameState state = STATE_START;
-    // GameState state = STATE_ANIMATION;
     float startTimer = 0.0f;
     bool startClickable = false;
 
     float animTimer = 0.0f;
 
-    float playerXSpeed = 0;
 
-    float playerYSpeed = 0.0f;
     bool onGround = false;
     bool isCrouching = false;
     bool crouchJump = false;
@@ -1010,17 +1057,12 @@ int main() {
         updateBGMFade(dt);
         updateBackgroundAnim(dt);
         int timeBefore = static_cast<int>(currentTime);
-        hud.update(dt);
+        if (state == STATE_GAME && !isDead) hud.update(dt);
         int timeAfter = static_cast<int>(currentTime);
-        if (state == STATE_GAME && !gameOver && currentTime <= 0.0f) {
-            gameOver = true;
-            stopBGM();
-            if (playingHurryUp) {
-                playingHurryUp = false;
-                StopMusicStream(hurryUpSe);
-            }
+        if (state == STATE_GAME && !isDead && currentTime <= 0.0f) {
+            die();
         }
-        if (!hurryUpTriggered && timeBefore > 100 && timeAfter <= 100 && state == STATE_GAME) {
+        if (!hurryUpTriggered && timeBefore > 99 && timeAfter <= 99 && state == STATE_GAME) {
             hurryUpTriggered = true;
             stopBGM();
             PlayMusicStream(hurryUpSe);
@@ -1044,6 +1086,7 @@ int main() {
                     state = STATE_GAME;
                     musicLogicalPos = 0.0f;
                     gameOver = false;
+                    isDead = false;
                     hurryUpTriggered = false;
                     if (currentTime <= 100) {
                         hurryUpTriggered = true;
@@ -1130,7 +1173,7 @@ int main() {
                     playerYSpeed = -(playerJumpSpeedMin + speedRatio * (playerJumpSpeedMax - playerJumpSpeedMin));
                     onGround = false;
                     if (isCrouching) crouchJump = true;
-                    playSound("jump_small");
+                    playSoundEffect("player.small_jump");
                 }
                 float prevBoxY = playerBox.y;
                 playerPos.y += playerYSpeed * dt;
@@ -1191,13 +1234,28 @@ int main() {
                 constexpr float camMaxX = 0;
                 constexpr float camMinY = -(COURSE_HEIGHT - SCREEN_HEIGHT);
                 constexpr float camMaxY = 0;
+#if ENABLE_CAMERA_BOUNDS
                 if (cameraX < camMinX) cameraX = camMinX;
                 if (cameraX > camMaxX) cameraX = camMaxX;
                 if (cameraY < camMinY) cameraY = camMinY;
                 if (cameraY > camMaxY) cameraY = camMaxY;
+#endif
                 }
+                if (playerPos.y > COURSE_HEIGHT + BLOCK_PX) die(false);
                 break;
             }
+            case STATE_DEAD:
+                if (!deathJumped) {
+                    deathWaitTimer += dt;
+                    if (deathWaitTimer >= playerDeathWaitTime) {
+                        deathJumped = true;
+                        if (deathBounce) playerYSpeed = -playerDeathJumpSpeed;
+                    }
+                } else {
+                    playerYSpeed += playerGravity * dt;
+                    playerPos.y += playerYSpeed * dt;
+                }
+                break;
         }
 
         BeginDrawing();
@@ -1205,15 +1263,15 @@ int main() {
         switch (state) {
             case STATE_START: {
                 ClearBackground(RAYWHITE);
-                const char* title = langTextC("title");
-                const char* sub = langTextC("subtitle");
+                const char* title = langTextC("gui.title");
+                const char* sub = langTextC("gui.subtitle");
                 int tSize = 80, sSize = 30;
                 int tw = measureText(title, tSize);
                 int sw = measureText(sub, sSize);
                 drawText(title, (SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - 60, tSize, DARKGRAY);
                 drawText(sub, (SCREEN_WIDTH - sw) / 2, SCREEN_HEIGHT / 2 + 30, sSize, GRAY);
                 if (startClickable) {
-                    const char* hint = langTextC("click_to_start");
+                    const char* hint = langTextC("gui.click_to_start");
                     int hw = measureText(hint, 24);
                     drawText(hint, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 100, 24, LIGHTGRAY);
                 }
@@ -1223,9 +1281,10 @@ int main() {
                 ClearBackground(BLACK);
                 float a = animTimer < 1.0f ? animTimer :
                           (animTimer > animDuration - 1.0f ? animDuration - animTimer : 1.0f);
-                const char* animText = langTextC("intro_animation"); drawText(animText, (SCREEN_WIDTH - measureText(animText, 40)) / 2, SCREEN_HEIGHT / 2 - 20, 40, Fade(WHITE, a));
+                const char* animText = langTextC("gui.intro_animation"); drawText(animText, (SCREEN_WIDTH - measureText(animText, 40)) / 2, SCREEN_HEIGHT / 2 - 20, 40, Fade(WHITE, a));
                 break;
             }
+            case STATE_DEAD:
             case STATE_GAME:
                 ClearBackground(SKYBLUE);
                 DrawBackground();
@@ -1234,7 +1293,7 @@ int main() {
                 for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlock(i);
                 DrawPlayer(playerPos);
                 if (debugMode) {
-                    drawText(TextFormat(langTextC("debug-speed"), fabs(playerXSpeed) / BLOCK_PX), 10, 10, 40, WHITE);
+                    drawText(TextFormat(langTextC("debug.speed"), fabs(playerXSpeed) / BLOCK_PX), 10, 10, 40, WHITE);
                 }
                 hud.draw();
                 break;

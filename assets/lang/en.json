@@ -1,7 +1,7 @@
 {
-    "title": "SMMRX",
-    "subtitle": "Super Mario Maker RX",
-    "click_to_start": "Click anywhere to start",
-    "intro_animation": "Intro Animation",
-    "debug-speed": "Speed: %f m/s"
+    "gui.title": "SMMRX",
+    "gui.subtitle": "Super Mario Maker RX",
+    "gui.click_to_start": "Click anywhere to start",
+    "gui.intro_animation": "Intro Animation",
+    "debug.speed": "Speed: %f m/s"
 }
