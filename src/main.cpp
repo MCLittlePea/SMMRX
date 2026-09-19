@@ -12,91 +12,16 @@
 #include "window_settings.hpp"
 #include "course_settings.hpp"
 #include "animation_settings.hpp"
+#include "enums.hpp"
+
+
 
 #define ENABLE_CAMERA_BOUNDS 1
 #define ENABLE_ANIMATION 1
 
 using namespace std;
 
-enum GameState {
-    STATE_START,
-    STATE_ANIMATION,
-    STATE_GAME,
-    STATE_DEAD
-};
 
-enum Language {
-    English,
-    Chinese,
-    LanguageCount
-};
-
-enum Character {
-    MARIO,
-    LUIGI,
-    TOAD,
-    TOADETTE
-};
-
-enum GameStyle {
-    SMB1,
-    SMB3,
-    SMW,
-    NSMBU,
-    SM3DW
-};
-
-enum CourseTheme {
-    Ground,
-    Underground,
-    Underwater,
-    Desert,
-    Snow,
-    Sky,
-    Forest,
-    GhostHouse,
-    Airship,
-    Castle
-};
-
-enum Time {
-    Day,
-    Night
-};
-
-enum BGMType {
-    Edit,
-    PlayNormal,
-    PlayMoon,
-    PlayHurry,
-    PlayMoonHurry,
-    Hurry,
-    BGM_TYPE_COUNT
-};
-
-enum GuiElementType {
-    NUMBER_FONT,
-    GUI_ELEMENT_TYPE_COUNT
-};
-
-enum Ability {
-    Small,
-    Super,
-    Fire,
-    Big,
-    SMB2,
-    Link,
-    SuperBall,
-    Racoon,
-    Frog,
-    Cape,
-    Balloon,
-    Propeller,
-    FlyingSquirrel,
-    Cat,
-    Boomerang,
-    Builder
-};
 
 struct BlockPos {
     int x;
@@ -204,20 +129,6 @@ struct GuiTextureInfo {
     }
 };
 
-Character currentPlayer = MARIO;
-Ability currentAbility = Small;
-float currentTime;
-float playerStateTimer = 0.0f;
-map<string, int> playerFrames = {
-    {"climb0", 0}, {"climb1", 1}, {"dead0", 2}, {"jump0", 3},
-    {"stand0", 4}, {"stoop0", 5}, {"swim0", 6}, {"swim1", 7},
-    {"swim2", 8}, {"swim3", 9}, {"swim4", 10}, {"swim5", 11},
-    {"turn0", 12}, {"walk0", 13}, {"walk1", 14}, {"walk2", 15}
-};
-int playerAnimFrame = 0;
-float playerAnimTimer = 0.0f;
-bool playerFacingRight = true;
-CourseInfo currentCourseInfo = {SMB1, Ground, Day, 70};
 
 map<BlockTexture2DInfo, vector<Texture2D>> blockTextures;
 map<PlayerTexture2DInfo, vector<Texture2D>> playerTextures;
@@ -255,19 +166,6 @@ float bgmFadeTargetVolume = 1.0f;
 float bgmFadeTimer = 0.0f;
 float bgmFadeDuration = 0.0f;
 bool bgmFading = false;
-bool gameOver = false;
-bool isDead = false;
-float deathWaitTimer = 0.0f;
-bool deathJumped = false;
-bool deathBounce = true;
-#if ENABLE_ANIMATION
-GameState state = STATE_START;
-#else
-GameState state = STATE_ANIMATION;
-#endif
-float playerXSpeed = 0.0f;
-float playerYSpeed = 0.0f;
-bool debugMode = false;
 Language currentLanguage = Chinese;
 Font guiFont;
 map<Language, map<string, string>> langData;
@@ -275,12 +173,10 @@ map<Language, map<string, string>> langData;
 struct CollisionBox {
     float x, y, width, height;
 };
-CollisionBox playerBox;
-map<CourseInfo, vector<Texture2D>> backgrounds;
-int bgAnimFrame = 0;
-float bgAnimTimer = 0.0f;
 
-vector<PlacedBlock> levelBlocks;
+
+map<CourseInfo, vector<Texture2D>> backgrounds;
+
 
 void loadSoundEffect(const string& id, const string& path, float volume = 1.0f) {
     soundEffects[id] = {LoadSound(path.c_str()), volume};
@@ -388,26 +284,6 @@ int measureText(const char* text, float size) {
     return static_cast<int>(MeasureTextEx(guiFont, text, size, 1).x);
 }
 
-void addBlock(BlockPos pos, const string& id) {
-    levelBlocks.push_back({pos, id});
-}
-
-void initLevel() {
-    for (int i = 1; i <= 10; i++) addBlock({i, 28}, "ground");
-    for (int i = 1; i <= 10; i++) addBlock({i, 27}, "ground");
-    for (int i = 12; i <= 200; i++) addBlock({i, 28}, "ground");
-    for (int i = 12; i <= 200; i++) addBlock({i, 27}, "ground");
-    addBlock({5,25}, "ground");
-    addBlock({5,24}, "ground");
-    addBlock({5,23}, "ground");
-    addBlock({5,22}, "ground");
-    addBlock({5,21}, "ground");
-    addBlock({2,24},"hard_block");
-    addBlock({3,24},"hard_block");
-    addBlock({7,24},"hard_block");
-    addBlock({8,24},"hard_block");
-}
-
 
 map<string, pair<float, float>> blockBoxSizes = {
     {"ground", {1.0f, 1.0f}},
@@ -432,43 +308,111 @@ CollisionBox getBlockBox(const BlockPos& pos, const string& id) {
 struct HudManager {
     bool running;
 
-    void init() { currentTime = currentCourseInfo.maxTime; }
-    void start() { running = true; }
-    void update(float dt) {
-        if (running && currentTime > 0) {
-            currentTime -= dt;
-            if (currentTime < 0) currentTime = 0;
-        }
-    }
-    void drawGlyph(GuiElementType type, int index, float x, float y) {
-        auto it = guiTextures.find({currentCourseInfo.style, type});
-        if (it == guiTextures.end() || index >= static_cast<int>(it->second.size())) return;
-        Texture2D glyph = it->second[index];
-        if (glyph.id == 0) return;
-        DrawTextureEx(glyph, {x, y}, 0.0f, 1.0f, WHITE);
-    }
-    void draw() {
-        int total = static_cast<int>(currentTime);
-        if (total > 9999) total = 9999;
-        string total_s = to_string(total);
-        while (total_s.size() < 4) total_s = "0" + total_s;
-        float x = SCREEN_WIDTH - 35 * 5.0f - 50.0f;
-        float y = 32.0f;
-        drawGlyph(NUMBER_FONT, 10, x, y);
-        drawGlyph(NUMBER_FONT, total_s[0] - '0', x + 35 + 10, y);
-        drawGlyph(NUMBER_FONT, total_s[1] - '0', x + 35 * 2 + 10, y);
-        drawGlyph(NUMBER_FONT, total_s[2] - '0', x + 35 * 3 + 10, y);
-        drawGlyph(NUMBER_FONT, total_s[3] - '0', x + 35 * 4 + 10, y);
-    }
-    void unload() {}
+    void init();
+    void start();
+    void update(float dt);
+    void drawGlyph(GuiElementType type, int index, float x, float y);
+    void draw();
+    void unload();
 };
 
-HudManager hud;
 
+float currentTime;
+float playerStateTimer = 0.0f;
+map<string, int> playerFrames = {
+    {"climb0", 0}, {"climb1", 1}, {"dead0", 2}, {"jump0", 3},
+    {"stand0", 4}, {"stoop0", 5}, {"swim0", 6}, {"swim1", 7},
+    {"swim2", 8}, {"swim3", 9}, {"swim4", 10}, {"swim5", 11},
+    {"turn0", 12}, {"walk0", 13}, {"walk1", 14}, {"walk2", 15}
+};
+int playerAnimFrame = 0;
+float playerAnimTimer = 0.0f;
+bool playerFacingRight = true;
+float playerXSpeed = 0.0f;
+float playerYSpeed = 0.0f;
+bool debugMode = false;
+CollisionBox playerBox;
+int bgAnimFrame = 0;
+float bgAnimTimer = 0.0f;
+#if ENABLE_ANIMATION
+GameState state = STATE_START;
+#else
+GameState state = STATE_ANIMATION;
+#endif
+bool gameOver = false;
+bool isDead = false;
+float deathWaitTimer = 0.0f;
+bool deathJumped = false;
+bool deathBounce = true;
+HudManager hud;
 float cameraX = 0.0f;
 float cameraY = -(COURSE_HEIGHT - SCREEN_HEIGHT);
 
-WorldPos playerPos = {(3 - 1) * BLOCK_PX, (5 - 1) * BLOCK_PX};
+namespace CurrentInfo {
+    CourseInfo currentCourseInfo = {SMB1, Ground, Day, 1000};
+    vector<PlacedBlock> levelBlocks;
+    WorldPos playerPos = {(3 - 1) * BLOCK_PX, (5 - 1) * BLOCK_PX};
+    Character currentPlayer = MARIO;
+    Ability currentAbility = Small;
+    bool characterDifference = true;
+}
+
+using namespace CurrentInfo;
+
+void HudManager::init() { currentTime = currentCourseInfo.maxTime; }
+void HudManager::start() { running = true; }
+void HudManager::update(float dt) {
+    if (running && currentTime > 0) {
+        currentTime -= dt;
+        if (currentTime < 0) currentTime = 0;
+    }
+}
+void HudManager::drawGlyph(GuiElementType type, int index, float x, float y) {
+    auto it = guiTextures.find({currentCourseInfo.style, type});
+    if (it == guiTextures.end() || index >= static_cast<int>(it->second.size())) return;
+    Texture2D glyph = it->second[index];
+    if (glyph.id == 0) return;
+    DrawTextureEx(glyph, {x, y}, 0.0f, 1.0f, WHITE);
+}
+void HudManager::draw() {
+    int total = static_cast<int>(currentTime);
+    if (total > 9999) total = 9999;
+    string total_s = to_string(total);
+    while (total_s.size() < 4) total_s = "0" + total_s;
+    float x = SCREEN_WIDTH - 35 * 5.0f - 50.0f;
+    float y = 32.0f;
+    drawGlyph(NUMBER_FONT, 10, x, y);
+    drawGlyph(NUMBER_FONT, total_s[0] - '0', x + 35 + 10, y);
+    drawGlyph(NUMBER_FONT, total_s[1] - '0', x + 35 * 2 + 10, y);
+    drawGlyph(NUMBER_FONT, total_s[2] - '0', x + 35 * 3 + 10, y);
+    drawGlyph(NUMBER_FONT, total_s[3] - '0', x + 35 * 4 + 10, y);
+}
+void HudManager::unload() {}
+
+void addBlock(BlockPos pos, const string& id) {
+    levelBlocks.push_back({pos, id});
+}
+
+void initLevel() {
+    for (int i = 1; i <= 10; i++) addBlock({i, 28}, "ground");
+    for (int i = 1; i <= 10; i++) addBlock({i, 27}, "ground");
+    for (int i = 12; i <= 200; i++) addBlock({i, 28}, "ground");
+    for (int i = 12; i <= 200; i++) addBlock({i, 27}, "ground");
+    addBlock({5,25}, "ground");
+    addBlock({5,24}, "ground");
+    addBlock({5,23}, "ground");
+    addBlock({5,22}, "ground");
+    addBlock({5,21}, "ground");
+    addBlock({2,24},"hard_block");
+    addBlock({3,24},"hard_block");
+    addBlock({7,24},"hard_block");
+    addBlock({8,24},"hard_block");
+}
+
+
+
+
+
 
 void initBlock(const BlockTexture2DInfo& info, const Texture2D& tex) {
     blockTextures[info].push_back(tex);
@@ -682,70 +626,12 @@ void loadBackground(CourseInfo info, const string& path) {
     backgrounds[info].push_back(tex);
 }
 
-GameStyle parseGameStyle(const string& s) {
-    if (s == "SMB1") return SMB1;
-    if (s == "SMB3") return SMB3;
-    if (s == "SMW") return SMW;
-    if (s == "NSMBU") return NSMBU;
-    if (s == "SM3DW") return SM3DW;
-    return SMB1;
-}
-
-CourseTheme parseCourseTheme(const string& s) {
-    if (s == "Ground") return Ground;
-    if (s == "Underground") return Underground;
-    if (s == "Underwater") return Underwater;
-    if (s == "Desert") return Desert;
-    if (s == "Snow") return Snow;
-    if (s == "Sky") return Sky;
-    if (s == "Forest") return Forest;
-    if (s == "GhostHouse") return GhostHouse;
-    if (s == "Airship") return Airship;
-    if (s == "Castle") return Castle;
-    return Ground;
-}
-
-Time parseTime(const string& s) {
-    if (s == "Night") return Night;
-    return Day;
-}
-
-Character parseCharacter(const string& s) {
-    if (s == "LUIGI") return LUIGI;
-    if (s == "TOAD") return TOAD;
-    if (s == "TOADETTE") return TOADETTE;
-    return MARIO;
-}
-
-Ability parseAbility(const string& s) {
-    if (s == "Super") return Super;
-    if (s == "Fire") return Fire;
-    if (s == "Big") return Big;
-    if (s == "SMB2") return SMB2;
-    if (s == "Link") return Link;
-    if (s == "SuperBall") return SuperBall;
-    if (s == "Racoon") return Racoon;
-    if (s == "Frog") return Frog;
-    if (s == "Cape") return Cape;
-    if (s == "Balloon") return Balloon;
-    if (s == "Propeller") return Propeller;
-    if (s == "FlyingSquirrel") return FlyingSquirrel;
-    if (s == "Cat") return Cat;
-    if (s == "Boomerang") return Boomerang;
-    if (s == "Builder") return Builder;
-    return Small;
-}
-
 vector<string> splitCSV(const string& line) {
     vector<string> result;
     stringstream ss(line);
     string cell;
     while (getline(ss, cell, ',')) result.push_back(cell);
     return result;
-}
-GuiElementType parseGuiElementType(const string& s) {
-    if (s == "NUMBER_FONT") return NUMBER_FONT;
-    return NUMBER_FONT;
 }
 
 void loadGuiFromSheet(GuiElementType type, GameStyle style, const string& path, TextureRect rect) {
@@ -933,7 +819,8 @@ void DrawPlayerShadow(WorldPos pos) {
     Rectangle src = playerFacingRight ?
         (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
         (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
-    ScreenPos screen = {pos.x + cameraX, pos.y + cameraY};
+    float renderOffset = (currentPlayer == TOADETTE && playerFacingRight) ? playerPlaitsWidth : 0.0f;
+    ScreenPos screen = {pos.x + cameraX - renderOffset, pos.y + cameraY};
     Rectangle shadowDest = {screen.x + shadowOffset, screen.y + shadowOffset,
                             static_cast<float>(tex.width) * SCALE, static_cast<float>(tex.height) * SCALE};
     DrawTexturePro(tex, src, shadowDest, (Vector2){0, 0}, 0.0f, Fade(BLACK, 0.5f));
@@ -948,7 +835,8 @@ void DrawPlayer(WorldPos pos) {
     Rectangle src = playerFacingRight ?
         (Rectangle){0, 0, static_cast<float>(tex.width), static_cast<float>(tex.height)} :
         (Rectangle){static_cast<float>(tex.width), 0, -static_cast<float>(tex.width), static_cast<float>(tex.height)};
-    ScreenPos screen = {pos.x + cameraX, pos.y + cameraY};
+    float renderOffset = (currentPlayer == TOADETTE && playerFacingRight) ? playerPlaitsWidth : 0.0f;
+    ScreenPos screen = {pos.x + cameraX - renderOffset, pos.y + cameraY};
     Rectangle dest = {screen.x, screen.y,
                       static_cast<float>(tex.width) * SCALE, static_cast<float>(tex.height) * SCALE};
     DrawTexturePro(tex, src, dest, (Vector2){0, 0}, 0.0f, WHITE);
@@ -1106,12 +994,43 @@ int main() {
                 break;
             case STATE_GAME: {
                 if (IsKeyPressed(KEY_F1)) debugMode = !debugMode;
+                float effMaxSpeed = playerMaxSpeed;
+                float effSprintMaxSpeed = playerSprintMaxSpeed;
+                float effAccel = playerAccel;
+                float effFriction = playerFriction;
+                float effGravity = playerGravity;
+                float effMaxFallSpeed = playerMaxFallSpeed;
+                float effJumpMin = playerJumpSpeedMin;
+                float effJumpMax = playerJumpSpeedMax;
+                float effBoxInset = playerBoxInset;
+                float effBoxTopInset = playerBoxTopInset;
+                if (characterDifference) {
+                    switch (currentPlayer) {
+                        case LUIGI:
+                            effJumpMin *= luigiJumpMultiplier;
+                            effJumpMax *= luigiJumpMultiplier;
+                            effGravity *= luigiGravityMultiplier;
+                            effMaxFallSpeed *= luigiFallSpeedMultiplier;
+                            break;
+                        case TOAD:
+                            effMaxSpeed *= toadSpeedMultiplier;
+                            effSprintMaxSpeed *= toadSpeedMultiplier;
+                            effAccel *= toadAccelMultiplier;
+                            effFriction *= toadFrictionMultiplier;
+                            break;
+                        case TOADETTE:
+                            effBoxInset += toadetteBoxInsetBonus;
+                            effBoxTopInset += toadetteBoxTopInsetBonus;
+                            break;
+                        default: break;
+                    }
+                }
                 if (!gameOver) {
                 constexpr float camSpeed = 1000.0f;
                 isCrouching = (onGround || crouchJump) && IsKeyDown(KEY_S);
                 bool groundCrouch = isCrouching && onGround;
-                float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? playerSprintMaxSpeed : playerMaxSpeed;
-                if (!isBraking && onGround && fabs(playerXSpeed) >= playerSprintMaxSpeed * 0.9f) {
+                float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? effSprintMaxSpeed : effMaxSpeed;
+                if (!isBraking && onGround && fabs(playerXSpeed) >= effSprintMaxSpeed * 0.9f) {
                     if ((playerXSpeed > 0 && IsKeyDown(KEY_A)) || (playerXSpeed < 0 && IsKeyDown(KEY_D))) {
                         isBraking = true;
                         brakeTimer = 0.0f;
@@ -1128,49 +1047,49 @@ int main() {
                     }
                 } else if (!groundCrouch) {
                     if (IsKeyDown(KEY_A) && playerXSpeed > -currentMaxSpeed) {
-                        playerXSpeed -= playerAccel * dt;
+                        playerXSpeed -= effAccel * dt;
                         if (playerXSpeed < -currentMaxSpeed) playerXSpeed = -currentMaxSpeed;
                     }
                     if (IsKeyDown(KEY_D) && playerXSpeed < currentMaxSpeed) {
-                        playerXSpeed += playerAccel * dt;
+                        playerXSpeed += effAccel * dt;
                         if (playerXSpeed > currentMaxSpeed) playerXSpeed = currentMaxSpeed;
                     }
                 }
                 bool overSpeed = fabs(playerXSpeed) > currentMaxSpeed + 1.0f;
                 if (!isBraking && (groundCrouch || (!IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) || overSpeed)) {
-                    if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - playerFriction * dt);
-                    else if (playerXSpeed < 0) playerXSpeed = min(0.0f, playerXSpeed + playerFriction * dt);
+                    if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - effFriction * dt);
+                    else if (playerXSpeed < 0) playerXSpeed = min(0.0f, playerXSpeed + effFriction * dt);
                 }
                 float prevX = playerPos.x;
                 playerPos.x += playerXSpeed * dt;
-                playerBox.x = playerPos.x + playerBoxInset;
-                playerBox.width = BLOCK_PX - playerBoxInset * 2.0f;
-                float boxHeight = BLOCK_PX - playerBoxTopInset;
+                playerBox.x = playerPos.x + effBoxInset;
+                playerBox.width = BLOCK_PX - effBoxInset * 2.0f;
+                float boxHeight = BLOCK_PX - effBoxTopInset;
                 if (isCrouching) boxHeight *= 0.5f;
                 playerBox.height = boxHeight;
                 playerBox.y = playerPos.y + BLOCK_PX - playerBox.height;
                 for (const auto& block : levelBlocks) {
                     CollisionBox blockBox = getBlockBox(block.pos, block.id);
                     if (boxOverlap(playerBox, blockBox)) {
-                        float prevBoxRight = prevX + playerBoxInset + playerBox.width;
-                        float prevBoxLeft = prevX + playerBoxInset;
+                        float prevBoxLeft = prevX + effBoxInset;
+                        float prevBoxRight = prevBoxLeft + playerBox.width;
                         if (playerXSpeed > 0 && prevBoxRight <= blockBox.x + 1.0f) {
-                            playerPos.x = blockBox.x - playerBox.width - playerBoxInset;
+                            playerPos.x = blockBox.x - playerBox.width - effBoxInset;
                             playerXSpeed = 0.0f;
-                            playerBox.x = playerPos.x + playerBoxInset;
+                            playerBox.x = playerPos.x + effBoxInset;
                         } else if (playerXSpeed < 0 && prevBoxLeft >= blockBox.x + blockBox.width - 1.0f) {
-                            playerPos.x = blockBox.x + blockBox.width - playerBoxInset;
+                            playerPos.x = blockBox.x + blockBox.width - effBoxInset;
                             playerXSpeed = 0.0f;
-                            playerBox.x = playerPos.x + playerBoxInset;
+                            playerBox.x = playerPos.x + effBoxInset;
                         }
                     }
                 }
-                playerYSpeed += playerGravity * dt;
-                if (playerYSpeed > playerMaxFallSpeed) playerYSpeed = playerMaxFallSpeed;
+                playerYSpeed += effGravity * dt;
+                if (playerYSpeed > effMaxFallSpeed) playerYSpeed = effMaxFallSpeed;
                 if (IsKeyPressed(KEY_SPACE) && onGround) {
                     float speedRatio = fabs(playerXSpeed) / currentMaxSpeed;
                     if (speedRatio > 1.0f) speedRatio = 1.0f;
-                    playerYSpeed = -(playerJumpSpeedMin + speedRatio * (playerJumpSpeedMax - playerJumpSpeedMin));
+                    playerYSpeed = -(effJumpMin + speedRatio * (effJumpMax - effJumpMin));
                     onGround = false;
                     if (isCrouching) crouchJump = true;
                     playSoundEffect("player.small_jump");

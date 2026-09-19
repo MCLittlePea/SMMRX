@@ -1,2 +1,5 @@
 style,player,ability,path,x,y,count,frameW,frameH
 SMB1,MARIO,Nothing,assets/textures/SMB1/players/mario.png,0,0,16,16,16
+SMB1,LUIGI,Nothing,assets/textures/SMB1/players/luigi.png,0,0,16,16,16
+SMB1,TOAD,Nothing,assets/textures/SMB1/players/toad.png,0,0,16,16,16
+SMB1,TOADETTE,Nothing,assets/textures/SMB1/players/toadette.png,0,0,16,24,16

@@ -16,7 +16,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-add_executable(SMMRX WIN32 main.cpp)
+add_executable(SMMRX WIN32 src/main.cpp)
 
 add_custom_command(TARGET SMMRX POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
