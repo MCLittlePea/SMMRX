@@ -12,6 +12,7 @@
 #include "window_settings.hpp"
 #include "course_settings.hpp"
 #include "animation_settings.hpp"
+#include "gui_settings.hpp"
 #include "enums.hpp"
 
 
@@ -352,12 +353,27 @@ namespace CurrentInfo {
     CourseInfo currentCourseInfo = {SMB1, Ground, Day, 1000};
     vector<PlacedBlock> levelBlocks;
     WorldPos playerPos = {(3 - 1) * BLOCK_PX, (5 - 1) * BLOCK_PX};
-    Character currentPlayer = MARIO;
+    Character currentPlayer = TOADETTE;
     Ability currentAbility = Small;
-    bool characterDifference = true;
+    bool characterDifference = false;
 }
 
 using namespace CurrentInfo;
+
+float letterboxScale = 1.0f;
+float letterboxX = 0.0f;
+float letterboxY = 0.0f;
+
+Vector2 screenToGamePos(Vector2 screenPos) {
+    return {
+        (screenPos.x - letterboxX) / letterboxScale,
+        (screenPos.y - letterboxY) / letterboxScale
+    };
+}
+
+Vector2 getGameMousePosition() {
+    return screenToGamePos(GetMousePosition());
+}
 
 void HudManager::init() { currentTime = currentCourseInfo.maxTime; }
 void HudManager::start() { running = true; }
@@ -372,20 +388,24 @@ void HudManager::drawGlyph(GuiElementType type, int index, float x, float y) {
     if (it == guiTextures.end() || index >= static_cast<int>(it->second.size())) return;
     Texture2D glyph = it->second[index];
     if (glyph.id == 0) return;
-    DrawTextureEx(glyph, {x, y}, 0.0f, 1.0f, WHITE);
+    DrawTextureEx(glyph, {x, y}, 0.0f, static_cast<float>(SCALE) / 4.0f, WHITE);
 }
 void HudManager::draw() {
     int total = static_cast<int>(currentTime);
     if (total > 9999) total = 9999;
     string total_s = to_string(total);
     while (total_s.size() < 4) total_s = "0" + total_s;
-    float x = SCREEN_WIDTH - 35 * 5.0f - 50.0f;
-    float y = 32.0f;
+    constexpr float glyphW = hudGlyphWidth * guiScale;
+    constexpr float glyphGap = hudGlyphGap * guiScale;
+    constexpr float marginX = hudMarginX * guiScale;
+    constexpr float marginY = hudMarginY * guiScale;
+    float x = SCREEN_WIDTH - glyphW * 5.0f - marginX;
+    float y = marginY;
     drawGlyph(NUMBER_FONT, 10, x, y);
-    drawGlyph(NUMBER_FONT, total_s[0] - '0', x + 35 + 10, y);
-    drawGlyph(NUMBER_FONT, total_s[1] - '0', x + 35 * 2 + 10, y);
-    drawGlyph(NUMBER_FONT, total_s[2] - '0', x + 35 * 3 + 10, y);
-    drawGlyph(NUMBER_FONT, total_s[3] - '0', x + 35 * 4 + 10, y);
+    drawGlyph(NUMBER_FONT, total_s[0] - '0', x + glyphW + glyphGap, y);
+    drawGlyph(NUMBER_FONT, total_s[1] - '0', x + glyphW * 2 + glyphGap, y);
+    drawGlyph(NUMBER_FONT, total_s[2] - '0', x + glyphW * 3 + glyphGap, y);
+    drawGlyph(NUMBER_FONT, total_s[3] - '0', x + glyphW * 4 + glyphGap, y);
 }
 void HudManager::unload() {}
 
@@ -407,6 +427,20 @@ void initLevel() {
     addBlock({3,24},"hard_block");
     addBlock({7,24},"hard_block");
     addBlock({8,24},"hard_block");
+
+    addBlock({15,26}, "hard_block");
+    addBlock({15,25},"hard_block");
+    addBlock({15,24},"hard_block");
+    addBlock({15,23},"hard_block");
+    addBlock({17,26}, "hard_block");
+    addBlock({17,25},"hard_block");
+    addBlock({17,24},"hard_block");
+    addBlock({17,23},"hard_block");
+    addBlock({18,23},"hard_block");
+    addBlock({19,23},"hard_block");
+    addBlock({20,23},"hard_block");
+    addBlock({21,23},"hard_block");
+    addBlock({22,23},"hard_block");
 }
 
 
@@ -883,10 +917,12 @@ void DrawBlockWithTexture(const BlockPos pos, const Texture2D &tex) {
 }
 
 int main() {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SMMRX - Super Mario Maker RX");
+    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "SMMRX - Super Mario Maker RX");
     SetExitKey(KEY_NULL);
-    ClearWindowState(FLAG_WINDOW_RESIZABLE);
+    SetWindowState(FLAG_WINDOW_RESIZABLE);
+    SetWindowMinSize(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
     SetTargetFPS(60);
+    RenderTexture2D gameRenderTarget = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
     loadLanguages();
     initFont();
     InitAudioDevice();
@@ -917,11 +953,13 @@ int main() {
     bool onGround = false;
     bool isCrouching = false;
     bool crouchJump = false;
-    bool isBraking = false;
-    float brakeTimer = 0.0f;
+
+    bool isTurning = false;
+    float turnTimer = 0.0f;
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
+        if (dt > 0.05f) dt = 0.05f;
         if (hasCurrentBGM) {
             UpdateMusicStream(currentBGM);
             musicLogicalPos += dt;
@@ -966,7 +1004,12 @@ int main() {
             case STATE_START:
                 startTimer += dt;
                 if (startTimer >= 2.0f) startClickable = true;
-                if (startClickable && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) state = STATE_ANIMATION;
+                if (startClickable && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    Vector2 gp = getGameMousePosition();
+                    if (gp.x >= 0 && gp.x <= SCREEN_WIDTH && gp.y >= 0 && gp.y <= SCREEN_HEIGHT) {
+                        state = STATE_ANIMATION;
+                    }
+                }
                 break;
             case STATE_ANIMATION:
                 animTimer += dt;
@@ -1030,20 +1073,24 @@ int main() {
                 isCrouching = (onGround || crouchJump) && IsKeyDown(KEY_S);
                 bool groundCrouch = isCrouching && onGround;
                 float currentMaxSpeed = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? effSprintMaxSpeed : effMaxSpeed;
-                if (!isBraking && onGround && fabs(playerXSpeed) >= effSprintMaxSpeed * 0.9f) {
+                if (!isTurning && onGround && fabs(playerXSpeed) > playerMaxSpeed) {
                     if ((playerXSpeed > 0 && IsKeyDown(KEY_A)) || (playerXSpeed < 0 && IsKeyDown(KEY_D))) {
-                        isBraking = true;
-                        brakeTimer = 0.0f;
+                        isTurning = true;
+                        turnTimer = 0.0f;
+                    }
+                } else if (!isTurning && onGround) {
+                    if ((playerXSpeed > 0 && IsKeyDown(KEY_A)) || (playerXSpeed < 0 && IsKeyDown(KEY_D))) {
+                        playerXSpeed = 0;
                     }
                 }
-                if (isBraking) {
+                if (isTurning) {
                     if (fabs(playerXSpeed) > 1.0f) {
                         if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - playerTurnFriction * dt);
                         else playerXSpeed = min(0.0f, playerXSpeed + playerTurnFriction * dt);
                     } else {
                         playerXSpeed = 0.0f;
-                        brakeTimer += dt;
-                        if (brakeTimer >= playerTurnDelay) isBraking = false;
+                        turnTimer += dt;
+                        if (turnTimer >= playerTurnDelay) isTurning = false;
                     }
                 } else if (!groundCrouch) {
                     if (IsKeyDown(KEY_A) && playerXSpeed > -currentMaxSpeed) {
@@ -1056,7 +1103,7 @@ int main() {
                     }
                 }
                 bool overSpeed = fabs(playerXSpeed) > currentMaxSpeed + 1.0f;
-                if (!isBraking && (groundCrouch || (!IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) || overSpeed)) {
+                if (!isTurning && (groundCrouch || (!IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) || overSpeed)) {
                     if (playerXSpeed > 0) playerXSpeed = max(0.0f, playerXSpeed - effFriction * dt);
                     else if (playerXSpeed < 0) playerXSpeed = min(0.0f, playerXSpeed + effFriction * dt);
                 }
@@ -1115,7 +1162,7 @@ int main() {
                     }
                 }
                 if (onGround) {
-                    if (isBraking) {
+                    if (isTurning) {
                         playerAnimFrame = playerFrames["turn0"];
                     } else if (groundCrouch) {
                         if (IsKeyDown(KEY_D)) playerFacingRight = true;
@@ -1127,8 +1174,8 @@ int main() {
                         if (fabs(playerXSpeed) < 10.0f) {
                             playerAnimFrame = playerFrames["stand0"];
                         } else {
-                        playerAnimTimer += dt * (fabs(playerXSpeed) / 100.0f) * playerWalkAnimSpeed;
-                        playerAnimFrame = playerFrames["walk0"] + (static_cast<int>(playerAnimTimer) % 3);
+                            playerAnimTimer += dt * (fabs(playerXSpeed) / 100.0f) * playerWalkAnimSpeed;
+                            playerAnimFrame = playerFrames["walk0"] + (static_cast<int>(playerAnimTimer) % 3);
                         }
                     }
                 } else {
@@ -1177,22 +1224,24 @@ int main() {
                 break;
         }
 
-        BeginDrawing();
+        BeginTextureMode(gameRenderTarget);
 
         switch (state) {
             case STATE_START: {
                 ClearBackground(RAYWHITE);
                 const char* title = langTextC("gui.title");
                 const char* sub = langTextC("gui.subtitle");
-                int tSize = 80, sSize = 30;
+                int tSize = static_cast<int>(startTitleSize * guiScale);
+                int sSize = static_cast<int>(startSubtitleSize * guiScale);
                 int tw = measureText(title, tSize);
                 int sw = measureText(sub, sSize);
-                drawText(title, (SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - 60, tSize, DARKGRAY);
-                drawText(sub, (SCREEN_WIDTH - sw) / 2, SCREEN_HEIGHT / 2 + 30, sSize, GRAY);
+                drawText(title, (SCREEN_WIDTH - tw) / 2, static_cast<int>(SCREEN_HEIGHT / 2 - startTitleOffsetY * guiScale), tSize, DARKGRAY);
+                drawText(sub, (SCREEN_WIDTH - sw) / 2, static_cast<int>(SCREEN_HEIGHT / 2 + startSubtitleOffsetY * guiScale), sSize, GRAY);
                 if (startClickable) {
                     const char* hint = langTextC("gui.click_to_start");
-                    int hw = measureText(hint, 24);
-                    drawText(hint, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 100, 24, LIGHTGRAY);
+                    int hintSize = static_cast<int>(startHintSize * guiScale);
+                    int hw = measureText(hint, hintSize);
+                    drawText(hint, (SCREEN_WIDTH - hw) / 2, static_cast<int>(SCREEN_HEIGHT - startHintOffsetBottom * guiScale), hintSize, LIGHTGRAY);
                 }
                 break;
             }
@@ -1200,7 +1249,7 @@ int main() {
                 ClearBackground(BLACK);
                 float a = animTimer < 1.0f ? animTimer :
                           (animTimer > animDuration - 1.0f ? animDuration - animTimer : 1.0f);
-                const char* animText = langTextC("gui.intro_animation"); drawText(animText, (SCREEN_WIDTH - measureText(animText, 40)) / 2, SCREEN_HEIGHT / 2 - 20, 40, Fade(WHITE, a));
+                const char* animText = langTextC("gui.intro_animation"); int animSize = static_cast<int>(animTextSize * guiScale); drawText(animText, (SCREEN_WIDTH - measureText(animText, animSize)) / 2, static_cast<int>(SCREEN_HEIGHT / 2 - animTextOffsetY * guiScale), animSize, Fade(WHITE, a));
                 break;
             }
             case STATE_DEAD:
@@ -1212,14 +1261,32 @@ int main() {
                 for (int i = 0; i < static_cast<int>(levelBlocks.size()); i++) DrawBlock(i);
                 DrawPlayer(playerPos);
                 if (debugMode) {
-                    drawText(TextFormat(langTextC("debug.speed"), fabs(playerXSpeed) / BLOCK_PX), 10, 10, 40, WHITE);
+                    drawText(TextFormat(langTextC("debug.speed"), fabs(playerXSpeed) / BLOCK_PX), static_cast<int>(debugTextOffsetX * guiScale), static_cast<int>(debugTextOffsetY * guiScale), static_cast<int>(debugTextSize * guiScale), WHITE);
                 }
                 hud.draw();
                 break;
         }
 
+        EndTextureMode();
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        float winW = static_cast<float>(GetScreenWidth());
+        float winH = static_cast<float>(GetScreenHeight());
+        letterboxScale = min(winW / SCREEN_WIDTH, winH / SCREEN_HEIGHT);
+        float drawW = SCREEN_WIDTH * letterboxScale;
+        float drawH = SCREEN_HEIGHT * letterboxScale;
+        letterboxX = (winW - drawW) / 2.0f;
+        letterboxY = (winH - drawH) / 2.0f;
+        Rectangle src = {0.0f, static_cast<float>(gameRenderTarget.texture.height),
+                         static_cast<float>(gameRenderTarget.texture.width),
+                         -static_cast<float>(gameRenderTarget.texture.height)};
+        Rectangle dest = {letterboxX, letterboxY, drawW, drawH};
+        DrawTexturePro(gameRenderTarget.texture, src, dest, (Vector2){0, 0}, 0.0f, WHITE);
         EndDrawing();
     }
+
+    UnloadRenderTexture(gameRenderTarget);
 
     for (auto& [info, vec] : backgrounds)
         for (auto& tex : vec)

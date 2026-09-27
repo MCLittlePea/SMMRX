@@ -6,4 +6,7 @@
 constexpr int SCREEN_WIDTH = BLOCK_PX * 24;
 constexpr int SCREEN_HEIGHT = BLOCK_PX * 27 / 2;
 
+constexpr int WINDOW_WIDTH = 1536;
+constexpr int WINDOW_HEIGHT = 864;
+
 #endif

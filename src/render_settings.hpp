@@ -2,10 +2,10 @@
 #define RENDER_SETTINGS_HPP
 
 constexpr int TILE_SIZE = 16;
-constexpr int SCALE = 4;
+constexpr int SCALE = 16;
 constexpr int BLOCK_PX = TILE_SIZE * SCALE;
 
-constexpr float shadowOffset = 12.0f;
+constexpr float shadowOffset = 12.0f * SCALE / 4.0f;
 
 constexpr float bgAnimFrameDuration = 0.5f;
 constexpr float bgSize = 512.0f * SCALE;
