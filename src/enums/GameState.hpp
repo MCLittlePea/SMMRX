@@ -1,0 +1,12 @@
+#ifndef ENUMS_GAME_STATE_HPP
+#define ENUMS_GAME_STATE_HPP
+
+enum GameState {
+    STATE_START,
+    STATE_ANIMATION,
+    STATE_GAME,
+    STATE_DEAD,
+    STATE_ERROR
+};
+
+#endif

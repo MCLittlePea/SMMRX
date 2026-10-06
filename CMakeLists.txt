@@ -16,7 +16,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-add_executable(SMMRX WIN32 src/main.cpp)
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+add_executable(SMMRX WIN32 ${SOURCES})
 
 add_custom_command(TARGET SMMRX POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
