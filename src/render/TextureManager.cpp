@@ -8,6 +8,7 @@ map<BlockTexture2DInfo, vector<Texture2D>> TextureManager::blockTextures;
 map<PlayerTexture2DInfo, vector<Texture2D>> TextureManager::playerTextures;
 map<GuiTextureInfo, vector<Texture2D>> TextureManager::guiTextures;
 map<CourseInfo, vector<Texture2D>> TextureManager::backgrounds;
+map<string, Texture2D> TextureManager::goalpoleTextures;
 
 static vector<string> splitCSV(const string& line) {
     vector<string> result;
@@ -68,12 +69,12 @@ void TextureManager::loadGuiFromSheet(const string& type, const string& style, c
 void TextureManager::loadBlockFromField(initializer_list<TextureRect> rects, const string& id) {
     struct ThemeDir { string theme; const char* dir; };
     static const ThemeDir dirs[] = {
-        {"Ground", "ground"}, {"Underground", "underground"}, {"Underwater", "water"},
-        {"Desert", "desert"}, {"Snow", "snow"}, {"Sky", "sky"},
-        {"Forest", "forest"}, {"GhostHouse", "ghost_house"}, {"Airship", "airship"}, {"Castle", "castle"}
+        {"Ground", "ground"}, {"Underground", "underground"}, {"Underwater", "underwater"},
+        {"Desert", "desert"}, {"Snow", "snow"}, {"Athletic", "athletic"},
+        {"Jungle", "jungle"}, {"GhostHouse", "ghosthouse"}, {"Airship", "airship"}, {"Castle", "castle"}
     };
     for (const auto& td : dirs) {
-        string base = "assets/textures/SMB1/" + string(td.dir) + "/";
+        string base = "assets/textures/SMB1/coursethemes/" + string(td.dir) + "/";
         if (FileExists((base + "field.png").c_str())) {
             for (const auto& rect : rects) {
                 loadBlockFromSheet(id, {"SMB1", td.theme, "Day"}, base + "field.png", rect);
@@ -138,6 +139,17 @@ void TextureManager::loadGuiFromCSV(const string& path) {
     }
 }
 
+void TextureManager::loadGoalPole(const string& folder) {
+    vector<string> parts = {"base", "pole", "top", "flag", "flag1", "flag2", "flag3", "flag4"};
+    for (const auto& part : parts) {
+        string path = folder + "/" + part + ".png";
+        if (FileExists(path.c_str())) {
+            goalpoleTextures[part] = LoadTexture(path.c_str());
+            SetTextureFilter(goalpoleTextures[part], TEXTURE_FILTER_POINT);
+        }
+    }
+}
+
 void TextureManager::unloadAll() {
     for (auto& [info, vec] : backgrounds)
         for (auto& tex : vec) UnloadTexture(tex);
@@ -147,4 +159,6 @@ void TextureManager::unloadAll() {
         for (auto& tex : vec) UnloadTexture(tex);
     for (auto& [info, vec] : guiTextures)
         for (auto& tex : vec) UnloadTexture(tex);
+    for (auto& [name, tex] : goalpoleTextures)
+        UnloadTexture(tex);
 }

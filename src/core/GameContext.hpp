@@ -16,7 +16,9 @@ using namespace std;
 struct GameContext {
     CourseInfo currentCourseInfo = {"SMB1", "Ground", "Day", 1000};
     vector<PlacedBlock> levelBlocks;
-    WorldPos playerPos = {(3 - 1) * BLOCK_PX, (5 - 1) * BLOCK_PX};
+    BlockPos goalPole = {COURSE_WIDTH - 9, COURSE_HEIGHT - 2};
+    int goalPoleHeight = 11;
+    WorldPos playerPos = {(4 - 1) * BLOCK_PX, (COURSE_HEIGHT - 3) * BLOCK_PX};
     string currentPlayer = "MARIO";
     string currentAbility = "Small";
     bool characterDifference = false;
@@ -44,6 +46,7 @@ struct GameContext {
     float deathWaitTimer = 0.0f;
     bool deathJumped = false;
     bool deathBounce = true;
+    bool gamePaused = false;
 
     string state = "START";
     bool gameOver = false;
@@ -52,9 +55,10 @@ struct GameContext {
 
     int bgAnimFrame = 0;
     float bgAnimTimer = 0.0f;
+    float bgScrollX = 0.0f;
 
     float cameraX = 0.0f;
-    float cameraY = -(COURSE_HEIGHT - SCREEN_HEIGHT);
+    float cameraY = -(COURSE_HEIGHT * BLOCK_PX - SCREEN_HEIGHT);
 
     float startTimer = 0.0f;
     bool startClickable = false;

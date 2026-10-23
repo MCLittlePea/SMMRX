@@ -18,8 +18,8 @@ void registerAll() {
     Registry<CourseThemeMeta>::registerItem("Underwater", {"Underwater", "Underwater"});
     Registry<CourseThemeMeta>::registerItem("Desert", {"Desert", "Desert"});
     Registry<CourseThemeMeta>::registerItem("Snow", {"Snow", "Snow"});
-    Registry<CourseThemeMeta>::registerItem("Sky", {"Sky", "Sky"});
-    Registry<CourseThemeMeta>::registerItem("Forest", {"Forest", "Forest"});
+    Registry<CourseThemeMeta>::registerItem("Athletic", {"Athletic", "Athletic"});
+    Registry<CourseThemeMeta>::registerItem("Jungle", {"Jungle", "Jungle"});
     Registry<CourseThemeMeta>::registerItem("GhostHouse", {"GhostHouse", "Ghost House"});
     Registry<CourseThemeMeta>::registerItem("Airship", {"Airship", "Airship"});
     Registry<CourseThemeMeta>::registerItem("Castle", {"Castle", "Castle"});

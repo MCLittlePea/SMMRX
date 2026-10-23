@@ -1,3 +1,11 @@
 id,style,theme,time,path,x,y,width,height
-ground,SMB1,Underwater,Day,assets/textures/SMB1/water/field.png,80,208,16,16
-ground,SMB1,Underwater,Night,assets/textures/SMB1/water/field_M.png,80,208,16,16
+ground,SMB1,Athletic,Day,assets/textures/SMB1/coursethemes/athletic/field.png,80,208,16,16
+ground,SMB1,Athletic,Night,assets/textures/SMB1/coursethemes/athletic/field_M.png,80,208,16,16
+ground,SMB1,Desert,Day,assets/textures/SMB1/coursethemes/desert/field.png,80,208,16,16
+ground,SMB1,Desert,Night,assets/textures/SMB1/coursethemes/desert/field_M.png,80,208,16,16
+ground,SMB1,GhostHouse,Day,assets/textures/SMB1/coursethemes/ghosthouse/field.png,80,192,16,16
+ground,SMB1,GhostHouse,Night,assets/textures/SMB1/coursethemes/ghosthouse/field_M.png,80,192,16,16
+ground,SMB1,Snow,Day,assets/textures/SMB1/coursethemes/snow/field.png,80,208,16,16
+ground,SMB1,Snow,Night,assets/textures/SMB1/coursethemes/snow/field_M.png,80,208,16,16
+ground,SMB1,Underwater,Day,assets/textures/SMB1/coursethemes/underwater/field.png,80,208,16,16
+ground,SMB1,Underwater,Night,assets/textures/SMB1/coursethemes/underwater/field_M.png,80,208,16,16

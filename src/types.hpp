@@ -52,7 +52,7 @@ struct CourseInfo {
     string style;
     string theme;
     string time;
-    int maxTime = 300;
+    int currentTime = 300;
 
     bool operator<(const CourseInfo& o) const {
         if (style != o.style) return style < o.style;

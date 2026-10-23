@@ -22,7 +22,7 @@ void EntityPlayer::update(float dt, GameContext& ctx) {
     updateAnimation(dt, ctx);
     updateCamera(ctx);
 
-    if (ctx.playerPos.y > COURSE_HEIGHT + BLOCK_PX) die(ctx, false);
+    if (ctx.playerPos.y > (COURSE_HEIGHT + 1) * BLOCK_PX) die(ctx, false);
 }
 
 void EntityPlayer::updateMovement(float dt, GameContext& ctx) {
@@ -202,9 +202,9 @@ void EntityPlayer::updateCamera(GameContext& ctx) {
         ctx.cameraY = deadBottom - ctx.playerPos.y;
     }
 #if ENABLE_CAMERA_BOUNDS
-    constexpr float camMinX = -(COURSE_WIDTH - SCREEN_WIDTH);
+    constexpr float camMinX = -(COURSE_WIDTH * BLOCK_PX - SCREEN_WIDTH);
     constexpr float camMaxX = 0;
-    constexpr float camMinY = -(COURSE_HEIGHT - SCREEN_HEIGHT);
+    constexpr float camMinY = -(COURSE_HEIGHT * BLOCK_PX - SCREEN_HEIGHT);
     constexpr float camMaxY = 0;
     if (ctx.cameraX < camMinX) ctx.cameraX = camMinX;
     if (ctx.cameraX > camMaxX) ctx.cameraX = camMaxX;

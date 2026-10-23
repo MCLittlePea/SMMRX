@@ -3,7 +3,8 @@
 
 #include "render_settings.hpp"
 
-constexpr int COURSE_WIDTH = 1000 * BLOCK_PX;
-constexpr int COURSE_HEIGHT = 28 * BLOCK_PX;
+constexpr int COURSE_WIDTH = 100;
+constexpr int COURSE_HEIGHT = 28;
+constexpr float goalPoleHitHalfWidth = BLOCK_PX / 16.0f;
 
 #endif

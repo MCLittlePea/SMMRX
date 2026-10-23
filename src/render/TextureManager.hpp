@@ -15,6 +15,7 @@ public:
     static map<PlayerTexture2DInfo, vector<Texture2D>> playerTextures;
     static map<GuiTextureInfo, vector<Texture2D>> guiTextures;
     static map<CourseInfo, vector<Texture2D>> backgrounds;
+    static map<string, Texture2D> goalpoleTextures;
 
     static void initBlock(const BlockTexture2DInfo& info, const Texture2D& tex);
     static void loadBlockFromSheet(const string& id, CourseInfo info, const string& path, TextureRect rect);
@@ -26,6 +27,7 @@ public:
     static void loadBackgroundsFromCSV(const string& path);
     static void loadPlayersFromCSV(const string& path);
     static void loadGuiFromCSV(const string& path);
+    static void loadGoalPole(const string& folder);
     static void unloadAll();
 };
 

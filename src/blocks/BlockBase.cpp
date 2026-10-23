@@ -30,8 +30,70 @@ static bool checkHaveBlock(const set<int>& blocksInd, const string& id, const ve
 
 int BlockBase::getTextureIndex(const GameContext& ctx) const {
     if (ctx.currentCourseInfo.style == "SMB1") {
-        if (ctx.currentCourseInfo.theme == "Ground") return 0;
-        if (ctx.currentCourseInfo.theme == "Underground") return 0;
+        if (ctx.currentCourseInfo.theme == "Athletic") {
+            if (id == "ground") {
+                const set<int> lu = getBlockOnPos(getOffsetPos(pos, -1, -1), ctx.levelBlocks);
+                const set<int> l = getBlockOnPos(getOffsetPos(pos, -1, 0), ctx.levelBlocks);
+                const set<int> ld = getBlockOnPos(getOffsetPos(pos, -1, 1), ctx.levelBlocks);
+                const set<int> d = getBlockOnPos(getOffsetPos(pos, 0, 1), ctx.levelBlocks);
+                const set<int> rd = getBlockOnPos(getOffsetPos(pos, 1, 1), ctx.levelBlocks);
+                const set<int> r = getBlockOnPos(getOffsetPos(pos, 1, 0), ctx.levelBlocks);
+                const set<int> ru = getBlockOnPos(getOffsetPos(pos, 1, -1), ctx.levelBlocks);
+                const set<int> u = getBlockOnPos(getOffsetPos(pos, 0, -1), ctx.levelBlocks);
+                if ((checkHaveBlock(u, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(lu, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(l, "ground", ctx.levelBlocks))) return 0;
+                if ((checkHaveBlock(u, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(ru, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(r, "ground", ctx.levelBlocks))) return 0;
+                if ((checkHaveBlock(r, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(rd, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(d, "ground", ctx.levelBlocks))) return 0;
+                if ((checkHaveBlock(l, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(ld, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(d, "ground", ctx.levelBlocks))) return 0;
+                return 1;
+            }
+        }
+        if (ctx.currentCourseInfo.theme == "Desert") {
+            if (id == "ground") {
+                const set<int> down = getBlockOnPos(getOffsetPos(pos, 0, 1), ctx.levelBlocks);
+                const set<int> left = getBlockOnPos(getOffsetPos(pos, -1, 0), ctx.levelBlocks);
+                const set<int> right = getBlockOnPos(getOffsetPos(pos, 1, 0), ctx.levelBlocks);
+                if ((!checkHaveBlock(down, "ground", ctx.levelBlocks))
+                || (checkHaveBlock(left, "ground", ctx.levelBlocks))
+                || (checkHaveBlock(right, "ground", ctx.levelBlocks))) return 0;
+                return 1;
+            }
+        }
+        if (ctx.currentCourseInfo.theme == "GhostHouse") {
+            if (id == "ground") {
+                const set<int> lu = getBlockOnPos(getOffsetPos(pos, -1, -1), ctx.levelBlocks);
+                const set<int> l = getBlockOnPos(getOffsetPos(pos, -1, 0), ctx.levelBlocks);
+                const set<int> ld = getBlockOnPos(getOffsetPos(pos, -1, 1), ctx.levelBlocks);
+                const set<int> d = getBlockOnPos(getOffsetPos(pos, 0, 1), ctx.levelBlocks);
+                const set<int> rd = getBlockOnPos(getOffsetPos(pos, 1, 1), ctx.levelBlocks);
+                const set<int> r = getBlockOnPos(getOffsetPos(pos, 1, 0), ctx.levelBlocks);
+                const set<int> ru = getBlockOnPos(getOffsetPos(pos, 1, -1), ctx.levelBlocks);
+                const set<int> u = getBlockOnPos(getOffsetPos(pos, 0, -1), ctx.levelBlocks);
+                if ((checkHaveBlock(lu, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(l, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(ld, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(d, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(rd, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(r, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(ru, "ground", ctx.levelBlocks))
+                && (checkHaveBlock(u, "ground", ctx.levelBlocks))) return 1;
+                return 0;
+            }
+        }
+        if (ctx.currentCourseInfo.theme == "Snow") {
+            if (id == "ground") {
+                const set<int> up = getBlockOnPos(getOffsetPos(pos, 0, -1), ctx.levelBlocks);
+                if (!checkHaveBlock(up, "ground", ctx.levelBlocks)) return 0;
+                return 1;
+            }
+        }
         if (ctx.currentCourseInfo.theme == "Underwater") {
             if (id == "ground") {
                 const set<int> down = getBlockOnPos(getOffsetPos(pos, 0, 1), ctx.levelBlocks);
@@ -42,8 +104,8 @@ int BlockBase::getTextureIndex(const GameContext& ctx) const {
                 || (checkHaveBlock(right, "ground", ctx.levelBlocks))) return 0;
                 return 1;
             }
-            return 0;
         }
+        return 0;
     }
     return -1;
 }

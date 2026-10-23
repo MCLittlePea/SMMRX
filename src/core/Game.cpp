@@ -28,6 +28,13 @@ void Game::initLevel() {
     addBlock({5,23},"ground");
     addBlock({5,22},"ground");
     addBlock({5,21},"ground");
+    addBlock({5,20},"ground");
+    addBlock({6,22},"ground");
+    addBlock({6,21},"ground");
+    addBlock({6,20},"ground");
+    addBlock({4,22},"ground");
+    addBlock({4,21},"ground");
+    addBlock({4,20},"ground");
     addBlock({2,24},"hard_block");
     addBlock({3,24},"hard_block");
     addBlock({7,24},"hard_block");
@@ -47,11 +54,20 @@ void Game::initLevel() {
     addBlock({22,23},"hard_block");
     addBlock({30,24},"spike_trap");
     addBlock({32,24},"spike_trap");
+    addBlock(ctx.goalPole, "goal_pole_base");
 }
 
 void Game::updateBackgroundAnim(float dt) {
     auto it = TextureManager::backgrounds.find(ctx.currentCourseInfo);
-    if (it == TextureManager::backgrounds.end() || it->second.size() <= 1) return;
+    if (it == TextureManager::backgrounds.end()) return;
+    if (ctx.currentCourseInfo.time == "Day") {
+        if (ctx.currentCourseInfo.theme == "Athletic") {
+            ctx.bgScrollX += bgAthleticScrollSpeed * dt;
+        } else if (ctx.currentCourseInfo.theme == "Airship") {
+            ctx.bgScrollX += bgAirshipScrollSpeed * dt;
+        }
+    }
+    if (it->second.size() <= 1) return;
     ctx.bgAnimTimer += dt;
     if (ctx.bgAnimTimer >= bgAnimFrameDuration) {
         ctx.bgAnimTimer = 0.0f;
@@ -63,10 +79,52 @@ void Game::renderBackground() {
     auto it = TextureManager::backgrounds.find(ctx.currentCourseInfo);
     if (it == TextureManager::backgrounds.end() || it->second.empty()) return;
     Texture2D tex = it->second[ctx.bgAnimFrame % static_cast<int>(it->second.size())];
-    for (int i = 0; i * bgSize + bgOffsetX < COURSE_WIDTH; i++) {
-        float px = floorf(i * bgSize + bgOffsetX + ctx.cameraX);
+    float scroll = fmodf(ctx.bgScrollX, bgSize);
+    bool autoScroll = (ctx.currentCourseInfo.time == "Day") &&
+        (ctx.currentCourseInfo.theme == "Athletic" || ctx.currentCourseInfo.theme == "Airship");
+    float camX = autoScroll ? 0.0f : ctx.cameraX;
+    for (int i = -1; i * bgSize + bgOffsetX + scroll < COURSE_WIDTH * BLOCK_PX + bgSize; i++) {
+        float px = floorf(i * bgSize + bgOffsetX + scroll + camX);
         float py = floorf(bgY + ctx.cameraY);
         DrawTextureEx(tex, (Vector2){px, py}, 0.0f, static_cast<float>(SCALE), WHITE);
+    }
+}
+
+void Game::renderGoalPoleShadow(float worldX, float worldY, int height) {
+    auto& gp = TextureManager::goalpoleTextures;
+    float px = floorf(worldX + ctx.cameraX) + shadowOffset;
+    float py = floorf(worldY + ctx.cameraY) + shadowOffset;
+    float topY = py - (height - 1) * BLOCK_PX;
+    Color sc = Fade(BLACK, 0.3f);
+    if (gp.find("pole") != gp.end())
+        for (int i = 1; i < height - 1; i++)
+            DrawTextureEx(gp["pole"], (Vector2){px, py - i * BLOCK_PX}, 0.0f, static_cast<float>(SCALE), sc);
+    if (gp.find("top") != gp.end())
+        DrawTextureEx(gp["top"], (Vector2){px, topY}, 0.0f, static_cast<float>(SCALE), sc);
+    if (gp.find("flag") != gp.end()) {
+        Texture2D& ft = gp["flag"];
+        DrawTexturePro(ft, (Rectangle){0, 0, -(float)ft.width, (float)ft.height},
+            (Rectangle){px - BLOCK_PX / 2.0f, topY + BLOCK_PX, (float)(ft.width * SCALE), (float)(ft.height * SCALE)},
+            (Vector2){0, 0}, 0.0f, sc);
+    }
+}
+
+void Game::renderGoalPoleUpper(float worldX, float worldY, int height) {
+    auto& gp = TextureManager::goalpoleTextures;
+    if (gp.find("pole") == gp.end()) return;
+    float px = floorf(worldX + ctx.cameraX);
+    float py = floorf(worldY + ctx.cameraY);
+    float topY = py - (height - 1) * BLOCK_PX;
+    for (int i = 1; i < height - 1; i++) {
+        DrawTextureEx(gp["pole"], (Vector2){px, py - i * BLOCK_PX}, 0.0f, static_cast<float>(SCALE), WHITE);
+    }
+    if (gp.find("top") != gp.end())
+        DrawTextureEx(gp["top"], (Vector2){px, topY}, 0.0f, static_cast<float>(SCALE), WHITE);
+    if (gp.find("flag") != gp.end()) {
+        Texture2D& ft = gp["flag"];
+        DrawTexturePro(ft, (Rectangle){0, 0, -(float)ft.width, (float)ft.height},
+            (Rectangle){px - BLOCK_PX / 2.0f, topY + BLOCK_PX, (float)(ft.width * SCALE), (float)(ft.height * SCALE)},
+            (Vector2){0, 0}, 0.0f, WHITE);
     }
 }
 
@@ -89,8 +147,16 @@ void Game::init() {
     AudioManager::loadBGMFromTheme("SMB1", "Ground");
     AudioManager::loadBGMFromTheme("SMB1", "Underground");
     AudioManager::loadBGMFromTheme("SMB1", "Underwater");
+    AudioManager::loadBGMFromTheme("SMB1", "Airship");
+    AudioManager::loadBGMFromTheme("SMB1", "Athletic");
+    AudioManager::loadBGMFromTheme("SMB1", "Castle");
+    AudioManager::loadBGMFromTheme("SMB1", "Desert");
+    AudioManager::loadBGMFromTheme("SMB1", "GhostHouse");
+    AudioManager::loadBGMFromTheme("SMB1", "Jungle");
+    AudioManager::loadBGMFromTheme("SMB1", "Snow");
     AudioManager::hurryUpSe = LoadMusicStream("assets/musics/SMB1/Hurry.mp3");
     TextureManager::loadGuiFromCSV("assets/data/guis.csv");
+    TextureManager::loadGoalPole("assets/textures/SMB1/goalpole");
 
     hud.init(ctx);
     initLevel();
@@ -137,6 +203,7 @@ void Game::updateAnimation(float dt) {
 }
 
 void Game::updateGame(float dt) {
+    if (ctx.gamePaused) return;
     int timeBefore = static_cast<int>(ctx.currentTime);
     if (!ctx.isDead) hud.update(dt, ctx);
     int timeAfter = static_cast<int>(ctx.currentTime);
@@ -155,6 +222,17 @@ void Game::updateGame(float dt) {
         AudioManager::hurryUpPendingType = (ctx.currentCourseInfo.time == "Night") ? "PlayMoonHurry" : "PlayHurry";
     }
     player.update(dt, ctx);
+    const auto& pb = ctx.playerBox;
+    float px = (ctx.goalPole.x - 1) * BLOCK_PX + BLOCK_PX / 2.0f - goalPoleHitHalfWidth;
+    for (int i = 1; i < ctx.goalPoleHeight - 1; i++) {
+        int row = ctx.goalPole.y - i;
+        float py = (row - 1) * BLOCK_PX;
+        if (pb.x < px + goalPoleHitHalfWidth * 2 && pb.x + pb.width > px &&
+            pb.y < py + BLOCK_PX && pb.y + pb.height > py) {
+            ctx.gamePaused = true;
+            break;
+        }
+    }
 }
 
 void Game::renderStart() {
@@ -193,6 +271,8 @@ void Game::renderGame() {
         if (b) { b->renderShadow(ctx); delete b; }
     }
     player.renderShadow(ctx);
+    renderGoalPoleShadow((ctx.goalPole.x - 1) * BLOCK_PX, (ctx.goalPole.y - 1) * BLOCK_PX, ctx.goalPoleHeight);
+    renderGoalPoleUpper((ctx.goalPole.x - 1) * BLOCK_PX, (ctx.goalPole.y - 1) * BLOCK_PX, ctx.goalPoleHeight);
     for (int i = 0; i < static_cast<int>(ctx.levelBlocks.size()); i++) {
         BlockBase* b = BlockRegistry::create(ctx.levelBlocks[i].id, ctx.levelBlocks[i].pos);
         if (b) { b->render(ctx); delete b; }

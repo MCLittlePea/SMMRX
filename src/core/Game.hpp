@@ -28,6 +28,8 @@ private:
     void renderAnimation();
     void renderGame();
     void renderBackground();
+    void renderGoalPoleShadow(float worldX, float worldY, int height);
+    void renderGoalPoleUpper(float worldX, float worldY, int height);
     void updateBackgroundAnim(float dt);
 };
 

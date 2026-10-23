@@ -11,5 +11,7 @@ constexpr float bgAnimFrameDuration = 0.5f;
 constexpr float bgSize = 512.0f * SCALE;
 constexpr float bgY = -2 * BLOCK_PX;
 constexpr float bgOffsetX = -8 * BLOCK_PX;
+constexpr float bgAthleticScrollSpeed = -100.0f;
+constexpr float bgAirshipScrollSpeed = -2000.0f;
 
 #endif

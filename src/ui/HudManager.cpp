@@ -5,7 +5,7 @@
 using namespace std;
 
 void HudManager::init(GameContext& ctx) {
-    ctx.currentTime = ctx.currentCourseInfo.maxTime;
+    ctx.currentTime = ctx.currentCourseInfo.currentTime;
 }
 
 void HudManager::start() {
