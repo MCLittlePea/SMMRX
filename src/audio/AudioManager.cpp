@@ -30,6 +30,10 @@ string AudioManager::hurryUpPendingStyle;
 string AudioManager::hurryUpPendingTheme;
 string AudioManager::hurryUpPendingType;
 
+Music AudioManager::courseClearSe = {};
+bool AudioManager::playingCourseClear = false;
+float AudioManager::courseClearTimer = 0.0f;
+
 static string bgmTypeToSuffix(const string& type) {
     if (type == "PlayNormal") return "";
     if (type == "PlayHurry") return "_Hurry";
@@ -215,6 +219,28 @@ void AudioManager::updateStreams(float dt) {
             playBGM(hurryUpPendingStyle, hurryUpPendingTheme, hurryUpPendingType);
         }
     }
+    if (playingCourseClear) {
+        UpdateMusicStream(courseClearSe);
+        courseClearTimer += dt;
+        if (courseClearTimer >= GetMusicTimeLength(courseClearSe)) {
+            StopMusicStream(courseClearSe);
+            playingCourseClear = false;
+        }
+    }
+}
+
+void AudioManager::loadCourseClear(const string& path) {
+    courseClearSe = LoadMusicStream(path.c_str());
+    playingCourseClear = false;
+}
+
+void AudioManager::playCourseClear() {
+    if (playingCourseClear) return;
+    stopBGM();
+    SetMusicVolume(courseClearSe, bgmVolume);
+    PlayMusicStream(courseClearSe);
+    courseClearTimer = 0.0f;
+    playingCourseClear = true;
 }
 
 void AudioManager::unloadAll() {

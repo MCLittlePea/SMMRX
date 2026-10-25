@@ -155,6 +155,7 @@ void Game::init() {
     AudioManager::loadBGMFromTheme("SMB1", "Jungle");
     AudioManager::loadBGMFromTheme("SMB1", "Snow");
     AudioManager::hurryUpSe = LoadMusicStream("assets/musics/SMB1/Hurry.mp3");
+    AudioManager::loadCourseClear("assets/musics/SMB1/CourseClear.wav");
     TextureManager::loadGuiFromCSV("assets/data/guis.csv");
     TextureManager::loadGoalPole("assets/textures/SMB1/goalpole");
 
@@ -203,9 +204,8 @@ void Game::updateAnimation(float dt) {
 }
 
 void Game::updateGame(float dt) {
-    if (ctx.gamePaused) return;
     int timeBefore = static_cast<int>(ctx.currentTime);
-    if (!ctx.isDead) hud.update(dt, ctx);
+    if (!ctx.isDead && !ctx.poleSliding && !ctx.courseClearing) hud.update(dt, ctx);
     int timeAfter = static_cast<int>(ctx.currentTime);
     if (!ctx.isDead && ctx.currentTime <= 0.0f) {
         player.die(ctx);
@@ -222,15 +222,20 @@ void Game::updateGame(float dt) {
         AudioManager::hurryUpPendingType = (ctx.currentCourseInfo.time == "Night") ? "PlayMoonHurry" : "PlayHurry";
     }
     player.update(dt, ctx);
-    const auto& pb = ctx.playerBox;
-    float px = (ctx.goalPole.x - 1) * BLOCK_PX + BLOCK_PX / 2.0f - goalPoleHitHalfWidth;
-    for (int i = 1; i < ctx.goalPoleHeight - 1; i++) {
-        int row = ctx.goalPole.y - i;
-        float py = (row - 1) * BLOCK_PX;
-        if (pb.x < px + goalPoleHitHalfWidth * 2 && pb.x + pb.width > px &&
-            pb.y < py + BLOCK_PX && pb.y + pb.height > py) {
-            ctx.gamePaused = true;
-            break;
+    if (!ctx.poleSliding && !ctx.courseClearing) {
+        const auto& pb = ctx.playerBox;
+        float px = (ctx.goalPole.x - 1) * BLOCK_PX + BLOCK_PX / 2.0f - goalPoleHitHalfWidth;
+        for (int i = 1; i < ctx.goalPoleHeight - 1; i++) {
+            int row = ctx.goalPole.y - i;
+            float py = (row - 1) * BLOCK_PX;
+            if (pb.x < px + goalPoleHitHalfWidth * 2 && pb.x + pb.width > px &&
+                pb.y < py + BLOCK_PX && pb.y + pb.height > py) {
+                ctx.poleSliding = true;
+                ctx.playerPos.x = (ctx.goalPole.x - 1) * BLOCK_PX - goalPoleSlideXOffset;
+                ctx.playerBox.x = ctx.playerPos.x + (BLOCK_PX - ctx.playerBox.width) / 2.0f;
+                AudioManager::stopBGM();
+                break;
+            }
         }
     }
 }

@@ -46,7 +46,10 @@ struct GameContext {
     float deathWaitTimer = 0.0f;
     bool deathJumped = false;
     bool deathBounce = true;
-    bool gamePaused = false;
+
+    bool poleSliding = false;
+    bool courseClearing = false;
+    float poleClimbTimer = 0.0f;
 
     string state = "START";
     bool gameOver = false;

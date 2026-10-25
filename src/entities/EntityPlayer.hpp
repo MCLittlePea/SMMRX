@@ -23,6 +23,8 @@ private:
     void updatePhysics(float dt, GameContext& ctx);
     void updateAnimation(float dt, GameContext& ctx);
     void updateCamera(GameContext& ctx);
+    void updatePoleSlide(float dt, GameContext& ctx);
+    void updateCourseClear(float dt, GameContext& ctx);
     void resolveHorizontalCollision(GameContext& ctx, float prevX);
     void resolveVerticalCollision(GameContext& ctx, float prevBoxY);
 };

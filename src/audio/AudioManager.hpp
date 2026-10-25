@@ -47,6 +47,10 @@ public:
     static string hurryUpPendingTheme;
     static string hurryUpPendingType;
 
+    static Music courseClearSe;
+    static bool playingCourseClear;
+    static float courseClearTimer;
+
     static void init();
     static void close();
     static void loadSoundEffect(const string& id, const string& path, float volume = 1.0f);
@@ -62,6 +66,8 @@ public:
     static void fadeBGM(float targetVolume, float duration);
     static void updateBGMFade(float dt);
     static void updateStreams(float dt);
+    static void loadCourseClear(const string& path);
+    static void playCourseClear();
     static void unloadAll();
 };
 

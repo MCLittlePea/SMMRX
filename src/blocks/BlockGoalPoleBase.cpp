@@ -16,3 +16,4 @@ void BlockGoalPoleBase::renderShadow(const GameContext& ctx) const {
     float py = floorf((float)(pos.y - 1) * BLOCK_PX + ctx.cameraY) + shadowOffset;
     DrawTextureEx(gp["base"], (Vector2){px, py}, 0.0f, static_cast<float>(SCALE), Fade(BLACK, 0.3f));
 }
+

@@ -1,6 +1,7 @@
 #include "EntityPlayer.hpp"
 #include <cmath>
 #include <algorithm>
+#include "../settings/animation_settings.hpp"
 
 using namespace std;
 
@@ -16,6 +17,14 @@ void EntityPlayer::update(float dt, GameContext& ctx) {
     }
     if (ctx.gameOver) return;
     if (IsKeyPressed(KEY_F1)) ctx.debugMode = !ctx.debugMode;
+    if (ctx.poleSliding) {
+        updatePoleSlide(dt, ctx);
+        return;
+    }
+    if (ctx.courseClearing) {
+        updateCourseClear(dt, ctx);
+        return;
+    }
 
     updateMovement(dt, ctx);
     updatePhysics(dt, ctx);
@@ -23,6 +32,47 @@ void EntityPlayer::update(float dt, GameContext& ctx) {
     updateCamera(ctx);
 
     if (ctx.playerPos.y > (COURSE_HEIGHT + 1) * BLOCK_PX) die(ctx, false);
+}
+
+void EntityPlayer::updatePoleSlide(float dt, GameContext& ctx) {
+    ctx.playerPos.x = (ctx.goalPole.x - 1) * BLOCK_PX - goalPoleSlideXOffset;
+    ctx.playerBox.x = ctx.playerPos.x + (BLOCK_PX - ctx.playerBox.width) / 2.0f;
+    ctx.playerPos.y += goalPoleSlideSpeed * dt;
+    ctx.poleClimbTimer += dt;
+    ctx.playerAnimFrame = (static_cast<int>(ctx.poleClimbTimer / goalPoleClimbAnimDuration) % 2 == 0)
+        ? ctx.playerFrames["climb0"] : ctx.playerFrames["climb1"];
+    ctx.playerBox.y = ctx.playerPos.y + BLOCK_PX - ctx.playerBox.height;
+    float baseTopY = (ctx.goalPole.y - 1) * BLOCK_PX;
+    updateCamera(ctx);
+    if (ctx.playerBox.y + ctx.playerBox.height >= baseTopY) {
+        ctx.poleSliding = false;
+        ctx.courseClearing = true;
+        ctx.playerPos.y = baseTopY - BLOCK_PX;
+        ctx.playerBox.y = ctx.playerPos.y + BLOCK_PX - ctx.playerBox.height;
+        ctx.playerYSpeed = 0.0f;
+        ctx.playerXSpeed = 0.0f;
+        AudioManager::playCourseClear();
+    }
+}
+
+void EntityPlayer::updateCourseClear(float dt, GameContext& ctx) {
+    ctx.playerXSpeed += playerAccel * dt;
+    if (ctx.playerXSpeed > playerMaxSpeed) ctx.playerXSpeed = playerMaxSpeed;
+    float prevX = ctx.playerPos.x;
+    ctx.playerPos.x += ctx.playerXSpeed * dt;
+    ctx.playerBox.x = ctx.playerPos.x + playerBoxInset;
+    ctx.playerBox.width = BLOCK_PX - playerBoxInset * 2.0f;
+    ctx.playerBox.height = BLOCK_PX - playerBoxTopInset;
+    ctx.playerBox.y = ctx.playerPos.y + BLOCK_PX - ctx.playerBox.height;
+    resolveHorizontalCollision(ctx, prevX);
+    ctx.playerYSpeed += playerGravity * dt;
+    if (ctx.playerYSpeed > playerMaxFallSpeed) ctx.playerYSpeed = playerMaxFallSpeed;
+    float prevBoxY = ctx.playerBox.y;
+    ctx.playerPos.y += ctx.playerYSpeed * dt;
+    ctx.playerBox.y = ctx.playerPos.y + BLOCK_PX - ctx.playerBox.height;
+    resolveVerticalCollision(ctx, prevBoxY);
+    updateAnimation(dt, ctx);
+    updateCamera(ctx);
 }
 
 void EntityPlayer::updateMovement(float dt, GameContext& ctx) {
@@ -127,6 +177,7 @@ void EntityPlayer::resolveHorizontalCollision(GameContext& ctx, float prevX) {
         CollisionBox blockBox = {(float)(block.pos.x - 1) * BLOCK_PX, (float)(block.pos.y - 1) * BLOCK_PX, (float)BLOCK_PX, (float)BLOCK_PX};
         if (boxOverlap(ctx.playerBox, blockBox)) {
             if (block.id == "spike_trap") { die(ctx); return; }
+            if (ctx.courseClearing && block.id == "goal_pole_base") continue;
             float prevBoxLeft = prevX + effBoxInset;
             float prevBoxRight = prevBoxLeft + ctx.playerBox.width;
             if (ctx.playerXSpeed > 0 && prevBoxRight <= blockBox.x + 1.0f) {
